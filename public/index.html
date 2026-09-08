@@ -302,19 +302,83 @@
   }
 
   .warn-flag { color: var(--bad); font-size: 12px; margin-top: 4px; }
+
+  /* ---------- login screen ---------- */
+  .login-screen {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .login-card {
+    width: 100%; max-width: 340px; background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow); padding: 32px 28px; text-align: center;
+  }
+  .login-card h1 { font-size: 28px; font-weight: 800; color: var(--accent-strong); margin-bottom: 4px; }
+  .login-card .tagline { font-size: 12.5px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 24px; display: block; }
+  .login-card form { display: flex; flex-direction: column; gap: 12px; text-align: left; }
+  .login-card label { font-size: 12px; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .05em; }
+  .login-card .field { display: flex; flex-direction: column; gap: 5px; }
+  .login-card .btn.primary { justify-content: center; margin-top: 6px; }
+  .login-error {
+    color: var(--accent-strong); background: var(--accent-tint); border-radius: 8px; padding: 8px 10px;
+    font-size: 13px; text-align: left;
+  }
+
+  /* ---------- role gating (staff account can view but not edit) ---------- */
+  body.role-user .admin-only { display: none !important; }
+  body.role-user #tab-ingredients .cell-input,
+  body.role-user #tab-ingredients .recipe-name,
+  body.role-user #tab-batches .cell-input,
+  body.role-user #tab-batches .recipe-name,
+  body.role-user #tab-recipes .cell-input,
+  body.role-user #tab-recipes .recipe-name {
+    pointer-events: none; background: var(--surface-2); color: var(--ink-soft);
+  }
+  .user-badge { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-soft); }
+  .user-badge .role-pill {
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+    padding: 2px 8px; border-radius: 999px; background: var(--accent-tint); color: var(--accent-strong);
+  }
+  .user-badge button { background: none; border: none; color: var(--ink-faint); font-size: 12.5px; cursor: pointer; text-decoration: underline; padding: 0; }
+  .user-badge button:hover { color: var(--accent-strong); }
 </style>
 </head>
 <body>
 
-<div class="app">
+<div class="login-screen" id="login-screen">
+  <div class="login-card">
+    <h1>🧋 Cost Ly</h1>
+    <span class="tagline">Sổ tính giá vốn đồ uống</span>
+    <form id="login-form">
+      <div class="field">
+        <label for="login-username">Tài khoản</label>
+        <input class="field-input" id="login-username" name="username" type="text" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="login-password">Mật khẩu</label>
+        <input class="field-input" id="login-password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <div class="login-error" id="login-error" hidden></div>
+      <button class="btn primary" type="submit">Đăng nhập</button>
+    </form>
+  </div>
+</div>
+
+<div class="app" id="app-root" hidden>
   <header class="masthead">
     <div class="title-block">
       <h1>🧋 Cost Ly</h1>
       <span class="tagline">Sổ tính giá vốn đồ uống</span>
     </div>
-    <div class="sync-status" id="sync-status">
-      <span class="sync-dot" id="sync-dot"></span>
-      <span id="sync-label">Đang kết nối…</span>
+    <div style="display:flex; align-items:center; gap:16px;">
+      <div class="user-badge" id="user-badge">
+        <span id="user-badge-name"></span>
+        <span class="role-pill" id="user-badge-role"></span>
+        <button type="button" id="logout-btn">Đăng xuất</button>
+      </div>
+      <div class="sync-status" id="sync-status">
+        <span class="sync-dot" id="sync-dot"></span>
+        <span id="sync-label">Đang kết nối…</span>
+      </div>
     </div>
   </header>
 
@@ -332,7 +396,7 @@
         <div class="toolbar">
           <div class="toolbar-row">
             <h2>Nguyên liệu &amp; đơn giá</h2>
-            <button class="btn primary" data-action="add-ingredient">+ Thêm nguyên liệu</button>
+            <button class="btn primary admin-only" data-action="add-ingredient">+ Thêm nguyên liệu</button>
           </div>
           <p class="hint">Điền giá tiền cho mỗi đơn vị nguyên liệu — đây là dữ liệu gốc để tính cost mọi công thức. Chỉ biết giá mua theo gói? Bấm 🧮 cạnh ô giá để tự tính giá/đơn vị.</p>
         </div>
@@ -364,7 +428,7 @@
       <div class="toolbar">
         <div class="toolbar-row">
           <h2>Bán thành phẩm (cốt)</h2>
-          <button class="btn primary" data-action="add-batch">+ Thêm cốt</button>
+          <button class="btn primary admin-only" data-action="add-batch">+ Thêm cốt</button>
         </div>
         <p class="hint">Nấu cốt từ nguyên liệu thô + định lượng thành phẩm → giá vốn mỗi đơn vị được tự tính, dùng lại trong mọi công thức.</p>
       </div>
@@ -377,7 +441,7 @@
       <div class="toolbar">
         <div class="toolbar-row">
           <h2>Công thức pha chế</h2>
-          <button class="btn primary" data-action="add-recipe">+ Thêm công thức</button>
+          <button class="btn primary admin-only" data-action="add-recipe">+ Thêm công thức</button>
         </div>
         <p class="hint">Mỗi công thức là danh sách nguyên liệu và định lượng cho 1 ly.</p>
       </div>
@@ -665,12 +729,12 @@
         <span class="pack-sep">/</span>
         <input class="cell-input num pack-field" data-field="packageQty" type="number" min="0" step="any" value="${ing.packageQty || 0}" placeholder="K.lượng">
         <span class="pack-result mono">= ${fmtVND(ing.price)}</span>
-        <button class="icon-btn" data-action="price-direct" title="Nhập giá trực tiếp theo đơn vị">↩</button>
+        <button class="icon-btn admin-only" data-action="price-direct" title="Nhập giá trực tiếp theo đơn vị">↩</button>
       </div>`;
     }
     return `<div class="pack-calc">
       <input class="cell-input num price money-input" data-field="price" type="text" inputmode="numeric" value="${fmtNum(ing.price)}" placeholder="0">
-      <button class="icon-btn" data-action="price-package" title="Tính giá từ giá mua theo gói">🧮</button>
+      <button class="icon-btn admin-only" data-action="price-package" title="Tính giá từ giá mua theo gói">🧮</button>
     </div>`;
   }
 
@@ -682,7 +746,7 @@
         <td><input class="cell-input" data-field="name" type="text" value="${escapeAttr(ing.name)}" placeholder="VD: Trà đen"></td>
         <td>${unitCellHtml(ing.unit, "ing:" + ing.id, "unit")}</td>
         <td>${priceCellHtml(ing)}</td>
-        <td class="actions"><button class="icon-btn" data-action="delete-ingredient" title="Xoá nguyên liệu">✕</button></td>
+        <td class="actions"><button class="icon-btn admin-only" data-action="delete-ingredient" title="Xoá nguyên liệu">✕</button></td>
       </tr>`).join("");
   }
 
@@ -818,7 +882,7 @@
       <article class="recipe-card card" data-batch-id="${b.id}">
         <div class="recipe-head">
           <input class="recipe-name" data-field="name" type="text" value="${escapeAttr(b.name)}" placeholder="Tên cốt, VD: Cốt trà chanh">
-          <button class="btn ghost small" data-action="delete-batch">Xoá cốt</button>
+          <button class="btn ghost small admin-only" data-action="delete-batch">Xoá cốt</button>
         </div>
         <div class="table-wrap">
           <table class="data-table">
@@ -838,14 +902,14 @@
                   <td><input class="cell-input num" data-field="qty" type="number" min="0" step="any" value="${it.qty}"></td>
                   <td class="mono" style="color:var(--ink-faint)">${ing ? escapeAttr(ing.unit) : "–"}</td>
                   <td class="num mono line-cost">${fmtVND(cost)}</td>
-                  <td class="actions"><button class="icon-btn" data-action="delete-item" title="Xoá nguyên liệu">✕</button></td>
+                  <td class="actions"><button class="icon-btn admin-only" data-action="delete-item" title="Xoá nguyên liệu">✕</button></td>
                 </tr>`;
               }).join("") || `<tr><td colspan="5" style="color:var(--ink-faint); font-size:13px; padding:12px 10px;">Chưa có nguyên liệu nào.</td></tr>`}
             </tbody>
           </table>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-          <button class="btn ghost small" data-action="add-item">+ Thêm nguyên liệu</button>
+          <button class="btn ghost small admin-only" data-action="add-item">+ Thêm nguyên liệu</button>
           <div class="yield-row">
             Ra thành phẩm
             <input class="cell-input num" data-field="yieldQty" type="number" min="0" step="any" value="${b.yieldQty}">
@@ -942,7 +1006,7 @@
       <article class="recipe-card card" data-recipe-id="${r.id}">
         <div class="recipe-head">
           <input class="recipe-name" data-field="name" type="text" value="${escapeAttr(r.name)}" placeholder="Tên đồ uống, VD: Trà sữa trân châu">
-          <button class="btn ghost small" data-action="delete-recipe">Xoá công thức</button>
+          <button class="btn ghost small admin-only" data-action="delete-recipe">Xoá công thức</button>
         </div>
         <div class="table-wrap">
           <table class="data-table">
@@ -962,14 +1026,14 @@
                   <td><input class="cell-input num" data-field="qty" type="number" min="0" step="any" value="${it.qty}"></td>
                   <td class="mono" style="color:var(--ink-faint)">${p ? escapeAttr(p.unit) : "–"}</td>
                   <td class="num mono line-cost">${fmtVND(cost)}</td>
-                  <td class="actions"><button class="icon-btn" data-action="delete-item" title="Xoá thành phần">✕</button></td>
+                  <td class="actions"><button class="icon-btn admin-only" data-action="delete-item" title="Xoá thành phần">✕</button></td>
                 </tr>`;
               }).join("") || `<tr><td colspan="5" style="color:var(--ink-faint); font-size:13px; padding:12px 10px;">Chưa có thành phần nào.</td></tr>`}
             </tbody>
           </table>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <button class="btn ghost small" data-action="add-item">+ Thêm thành phần</button>
+          <button class="btn ghost small admin-only" data-action="add-item">+ Thêm thành phần</button>
           <div class="recipe-total">Giá vốn / ly <strong class="mono">${fmtVND(recipeTotal(r))}</strong></div>
         </div>
       </article>
@@ -1165,9 +1229,75 @@
   sellPriceInput.addEventListener("focus", () => sellPriceInput.select());
 
   // ---------------------------------------------------------------
+  // auth — login screen gates the whole app; role decides edit rights
+  // ---------------------------------------------------------------
+  let currentUser = null; // {username, role}
+  const loginScreen = $("#login-screen");
+  const appRoot = $("#app-root");
+  const loginForm = $("#login-form");
+  const loginError = $("#login-error");
+
+  function applyUser(user) {
+    currentUser = user;
+    document.body.classList.toggle("role-user", user.role !== "admin");
+    $("#user-badge-name").textContent = user.username;
+    $("#user-badge-role").textContent = user.role === "admin" ? "Quản lý" : "Nhân viên";
+    loginScreen.hidden = true;
+    appRoot.hidden = false;
+    initStore();
+  }
+
+  function showLogin() {
+    currentUser = null;
+    loginScreen.hidden = false;
+    appRoot.hidden = true;
+  }
+
+  loginForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    loginError.hidden = true;
+    const username = $("#login-username").value.trim();
+    const password = $("#login-password").value;
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      if (!res.ok) {
+        loginError.textContent = res.status === 401 ? "Sai tài khoản hoặc mật khẩu." : "Không đăng nhập được, thử lại.";
+        loginError.hidden = false;
+        return;
+      }
+      const user = await res.json();
+      loginForm.reset();
+      applyUser(user);
+    } catch (e2) {
+      loginError.textContent = "Không kết nối được máy chủ, thử lại.";
+      loginError.hidden = false;
+    }
+  });
+
+  $("#logout-btn").addEventListener("click", async () => {
+    try { await fetch("/api/auth/logout", { method: "POST" }); } catch (e) {}
+    location.reload();
+  });
+
+  // ---------------------------------------------------------------
   // boot
   // ---------------------------------------------------------------
-  initStore();
+  (async function checkAuth() {
+    try {
+      const res = await fetch("/api/auth/me");
+      if (res.ok) {
+        applyUser(await res.json());
+      } else {
+        showLogin();
+      }
+    } catch (e) {
+      showLogin();
+    }
+  })();
   window.addEventListener("focus", refreshFromServer);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") refreshFromServer();

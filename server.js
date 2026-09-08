@@ -1,16 +1,25 @@
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
+const cookieParser = require("cookie-parser");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
 const { Pool } = require("pg");
 
 const app = express();
 app.use(express.json({ limit: "2mb" }));
+app.use(cookieParser());
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
 });
 
+// Falls back to a random secret if JWT_SECRET isn't set — tokens just won't
+// survive a server restart in that case (everyone has to log in again).
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString("hex");
+const TOKEN_COOKIE = "costly_token";
 const ALLOWED_COLLECTIONS = new Set(["ingredients", "batches", "recipes"]);
 
 async function ensureSchema() {
@@ -21,6 +30,14 @@ async function ensureSchema() {
       data JSONB NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       PRIMARY KEY (collection, id)
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_users (
+      id SERIAL PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('admin', 'user'))
     )
   `);
 }
@@ -52,6 +69,79 @@ async function maybeSeed() {
   }
 }
 
+// Creates/updates the two built-in accounts from env vars on every boot, so
+// rotating a password is just: change the env var on Render, redeploy.
+async function syncSeedUsers() {
+  const accounts = [
+    { username: process.env.ADMIN_USERNAME || "admin", password: process.env.ADMIN_PASSWORD, role: "admin" },
+    { username: process.env.STAFF_USERNAME || "nhanvien", password: process.env.STAFF_PASSWORD, role: "user" },
+  ];
+  for (const acc of accounts) {
+    if (!acc.password) continue;
+    const hash = await bcrypt.hash(acc.password, 10);
+    await pool.query(
+      `INSERT INTO app_users (username, password_hash, role) VALUES ($1,$2,$3)
+       ON CONFLICT (username) DO UPDATE SET password_hash=$2, role=$3`,
+      [acc.username, hash, acc.role]
+    );
+  }
+}
+
+function signToken(user) {
+  return jwt.sign({ sub: user.username, role: user.role }, JWT_SECRET, { expiresIn: "30d" });
+}
+
+function authRequired(req, res, next) {
+  const token = req.cookies[TOKEN_COOKIE];
+  if (!token) return res.status(401).json({ error: "unauthenticated" });
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch (e) {
+    res.clearCookie(TOKEN_COOKIE);
+    return res.status(401).json({ error: "unauthenticated" });
+  }
+}
+
+function adminRequired(req, res, next) {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "forbidden" });
+  next();
+}
+
+const cookieOpts = {
+  httpOnly: true,
+  sameSite: "lax",
+  secure: process.env.NODE_ENV === "production" || !!process.env.RENDER,
+  maxAge: 30 * 24 * 60 * 60 * 1000,
+};
+
+app.post("/api/auth/login", async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) return res.status(400).json({ error: "missing credentials" });
+  try {
+    const { rows } = await pool.query("SELECT * FROM app_users WHERE username=$1", [username]);
+    const user = rows[0];
+    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+      return res.status(401).json({ error: "invalid credentials" });
+    }
+    const token = signToken(user);
+    res.cookie(TOKEN_COOKIE, token, cookieOpts);
+    res.json({ username: user.username, role: user.role });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "server error" });
+  }
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  res.clearCookie(TOKEN_COOKIE);
+  res.json({ ok: true });
+});
+
+app.get("/api/auth/me", authRequired, (req, res) => {
+  res.json({ username: req.user.sub, role: req.user.role });
+});
+
 function checkCollection(req, res, next) {
   if (!ALLOWED_COLLECTIONS.has(req.params.collection)) {
     return res.status(404).json({ error: "unknown collection" });
@@ -59,7 +149,7 @@ function checkCollection(req, res, next) {
   next();
 }
 
-app.get("/api/:collection", checkCollection, async (req, res) => {
+app.get("/api/:collection", authRequired, checkCollection, async (req, res) => {
   try {
     const { rows } = await pool.query(
       "SELECT id, data FROM documents WHERE collection=$1 ORDER BY id",
@@ -72,7 +162,7 @@ app.get("/api/:collection", checkCollection, async (req, res) => {
   }
 });
 
-app.put("/api/:collection/:id", checkCollection, async (req, res) => {
+app.put("/api/:collection/:id", authRequired, adminRequired, checkCollection, async (req, res) => {
   try {
     const data = req.body || {};
     await pool.query(
@@ -87,7 +177,7 @@ app.put("/api/:collection/:id", checkCollection, async (req, res) => {
   }
 });
 
-app.delete("/api/:collection/:id", checkCollection, async (req, res) => {
+app.delete("/api/:collection/:id", authRequired, adminRequired, checkCollection, async (req, res) => {
   try {
     await pool.query("DELETE FROM documents WHERE collection=$1 AND id=$2", [
       req.params.collection,
@@ -108,6 +198,7 @@ const PORT = process.env.PORT || 3000;
   try {
     await ensureSchema();
     await maybeSeed();
+    await syncSeedUsers();
   } catch (e) {
     console.error("Startup error", e);
   }
