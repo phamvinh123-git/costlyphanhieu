@@ -323,16 +323,6 @@
     font-size: 13px; text-align: left;
   }
 
-  /* ---------- role gating (staff account can view but not edit) ---------- */
-  body.role-user .admin-only { display: none !important; }
-  body.role-user #tab-ingredients .cell-input,
-  body.role-user #tab-ingredients .recipe-name,
-  body.role-user #tab-batches .cell-input,
-  body.role-user #tab-batches .recipe-name,
-  body.role-user #tab-recipes .cell-input,
-  body.role-user #tab-recipes .recipe-name {
-    pointer-events: none; background: var(--surface-2); color: var(--ink-soft);
-  }
   .user-badge { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-soft); }
   .user-badge .role-pill {
     font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
@@ -1239,9 +1229,8 @@
 
   function applyUser(user) {
     currentUser = user;
-    document.body.classList.toggle("role-user", user.role !== "admin");
     $("#user-badge-name").textContent = user.username;
-    $("#user-badge-role").textContent = user.role === "admin" ? "Quản lý" : "Nhân viên";
+    $("#user-badge-role").textContent = user.role === "admin" ? "Quản lý" : "Chủ quán";
     loginScreen.hidden = true;
     appRoot.hidden = false;
     initStore();

@@ -37,9 +37,14 @@ async function ensureSchema() {
       id SERIAL PRIMARY KEY,
       username TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
-      role TEXT NOT NULL CHECK (role IN ('admin', 'user'))
+      role TEXT NOT NULL CHECK (role IN ('admin', 'owner'))
     )
   `);
+  // migration: the role check used to be ('admin','user') — widen it to allow 'owner',
+  // and drop the old staff-only 'nhanvien' account, which no longer has a place.
+  await pool.query(`ALTER TABLE app_users DROP CONSTRAINT IF EXISTS app_users_role_check`);
+  await pool.query(`ALTER TABLE app_users ADD CONSTRAINT app_users_role_check CHECK (role IN ('admin', 'owner'))`);
+  await pool.query(`DELETE FROM app_users WHERE role = 'user'`);
 }
 
 async function maybeSeed() {
@@ -71,10 +76,12 @@ async function maybeSeed() {
 
 // Creates/updates the two built-in accounts from env vars on every boot, so
 // rotating a password is just: change the env var on Render, redeploy.
+// Both roles get full read/write access — they're just two separate logins
+// (e.g. one for the developer, one for the shop owner), not a permission tier.
 async function syncSeedUsers() {
   const accounts = [
     { username: process.env.ADMIN_USERNAME || "admin", password: process.env.ADMIN_PASSWORD, role: "admin" },
-    { username: process.env.STAFF_USERNAME || "nhanvien", password: process.env.STAFF_PASSWORD, role: "user" },
+    { username: process.env.OWNER_USERNAME || "chuquan", password: process.env.OWNER_PASSWORD, role: "owner" },
   ];
   for (const acc of accounts) {
     if (!acc.password) continue;
@@ -101,11 +108,6 @@ function authRequired(req, res, next) {
     res.clearCookie(TOKEN_COOKIE);
     return res.status(401).json({ error: "unauthenticated" });
   }
-}
-
-function adminRequired(req, res, next) {
-  if (req.user.role !== "admin") return res.status(403).json({ error: "forbidden" });
-  next();
 }
 
 const cookieOpts = {
@@ -162,7 +164,7 @@ app.get("/api/:collection", authRequired, checkCollection, async (req, res) => {
   }
 });
 
-app.put("/api/:collection/:id", authRequired, adminRequired, checkCollection, async (req, res) => {
+app.put("/api/:collection/:id", authRequired, checkCollection, async (req, res) => {
   try {
     const data = req.body || {};
     await pool.query(
@@ -177,7 +179,7 @@ app.put("/api/:collection/:id", authRequired, adminRequired, checkCollection, as
   }
 });
 
-app.delete("/api/:collection/:id", authRequired, adminRequired, checkCollection, async (req, res) => {
+app.delete("/api/:collection/:id", authRequired, checkCollection, async (req, res) => {
   try {
     await pool.query("DELETE FROM documents WHERE collection=$1 AND id=$2", [
       req.params.collection,
