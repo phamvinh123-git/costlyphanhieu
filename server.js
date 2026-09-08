@@ -40,11 +40,11 @@ async function ensureSchema() {
       role TEXT NOT NULL CHECK (role IN ('admin', 'owner'))
     )
   `);
-  // migration: the role check used to be ('admin','user') — widen it to allow 'owner',
-  // and drop the old staff-only 'nhanvien' account, which no longer has a place.
+  // migration: drop the old staff-only 'nhanvien' account (role='user') BEFORE
+  // tightening the constraint, or the constraint add fails on that leftover row.
   await pool.query(`ALTER TABLE app_users DROP CONSTRAINT IF EXISTS app_users_role_check`);
+  await pool.query(`DELETE FROM app_users WHERE role NOT IN ('admin', 'owner')`);
   await pool.query(`ALTER TABLE app_users ADD CONSTRAINT app_users_role_check CHECK (role IN ('admin', 'owner'))`);
-  await pool.query(`DELETE FROM app_users WHERE role = 'user'`);
 }
 
 async function maybeSeed() {
