@@ -1,0 +1,1178 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cost Ly — Sổ tính giá vốn đồ uống</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧋</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #FFF9F8;
+    --surface: #FFFFFF;
+    --surface-2: #FFF1EF;
+    --line: #F6D9D6;
+    --ink: #2B1616;
+    --ink-soft: #8A605C;
+    --ink-faint: #BB9490;
+    --accent: #E4483F;
+    --accent-tint: #FCE2E0;
+    --accent-strong: #C6302A;
+    --accent-strong-text: #FFFFFF;
+    --good: #2E9E6D;
+    --good-tint: #E3F5EC;
+    --bad: #D97706;
+    --bad-tint: #FDF0DC;
+    --shadow: 0 1px 2px rgba(180,40,30,.07), 0 10px 22px -12px rgba(180,40,30,.28);
+    --radius: 16px;
+    --radius-sm: 10px;
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #1C1010;
+      --surface: #251515;
+      --surface-2: #2F1A19;
+      --line: #4A2624;
+      --ink: #FBEDEA;
+      --ink-soft: #D6B0AB;
+      --ink-faint: #99716D;
+      --accent: #FF6B5E;
+      --accent-tint: #3D1E1B;
+      --accent-strong: #FF6B5E;
+      --accent-strong-text: #2A0B08;
+      --good: #58C79A;
+      --good-tint: #17342A;
+      --bad: #F0A94E;
+      --bad-tint: #3B2A14;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 26px -12px rgba(0,0,0,.6);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #1C1010;
+    --surface: #251515;
+    --surface-2: #2F1A19;
+    --line: #4A2624;
+    --ink: #FBEDEA;
+    --ink-soft: #D6B0AB;
+    --ink-faint: #99716D;
+    --accent: #FF6B5E;
+    --accent-tint: #3D1E1B;
+    --accent-strong: #FF6B5E;
+    --accent-strong-text: #2A0B08;
+    --good: #58C79A;
+    --good-tint: #17342A;
+    --bad: #F0A94E;
+    --bad-tint: #3B2A14;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 26px -12px rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  @media (prefers-reduced-motion: no-preference) {
+    body { animation: pageIn .45s cubic-bezier(.16,1,.3,1) both; }
+  }
+  @keyframes pageIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Be Vietnam Pro', ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { font-family: 'Baloo 2', ui-rounded, system-ui, sans-serif; text-wrap: balance; margin: 0; }
+  .mono { font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  input, select, button { font-family: inherit; font-size: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+
+  .app {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding-bottom: 4px;
+  }
+  .masthead .title-block { display: flex; align-items: baseline; gap: 12px; flex-wrap: baseline; }
+  .masthead h1 { font-size: 32px; font-weight: 800; letter-spacing: -0.01em; color: var(--accent-strong); }
+  .masthead .tagline {
+    font-size: 12.5px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .08em;
+  }
+  .sync-status { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+  .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); flex: none; transition: background-color .3s ease; }
+  .sync-dot.on { background: var(--good); }
+  .sync-dot.local { background: var(--accent); }
+  @media (prefers-reduced-motion: no-preference) {
+    .sync-dot.on, .sync-dot.local { animation: dotPop .35s ease; }
+  }
+  @keyframes dotPop { 0% { transform: scale(.4); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
+
+  /* ---------- tabs ---------- */
+  .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--line); }
+  .tab-btn {
+    appearance: none; border: 1px solid transparent; border-bottom: none;
+    background: transparent; color: var(--ink-soft);
+    padding: 10px 18px 11px; border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    font-size: 14px; font-weight: 700; cursor: pointer; position: relative; top: 2px;
+    transition: color .2s ease, background-color .2s ease, transform .15s ease;
+  }
+  .tab-btn:hover { color: var(--accent-strong); transform: translateY(-1px); }
+  .tab-btn.active {
+    background: var(--surface); color: var(--accent-strong);
+    border-color: var(--line); border-bottom: 2px solid var(--accent);
+  }
+  .tab-btn .tab-count {
+    display: inline-block; margin-left: 7px; font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px; color: var(--ink-faint); font-weight: 400;
+  }
+
+  .panel { display: none; flex-direction: column; gap: 16px; }
+  .panel.active { display: flex; }
+  @media (prefers-reduced-motion: no-preference) {
+    .panel.active { animation: panelIn .32s cubic-bezier(.16,1,.3,1) both; }
+  }
+  @keyframes panelIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  /* ---------- shared card / toolbar ---------- */
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 18px 20px; transition: box-shadow .2s ease, transform .2s ease;
+  }
+  .recipe-card.card:hover { box-shadow: 0 4px 16px -6px rgba(198,48,42,.22), var(--shadow); }
+  .toolbar { display: flex; flex-direction: column; gap: 8px; }
+  .toolbar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .toolbar h2 { font-size: 20px; font-weight: 600; }
+  .toolbar p.hint { margin: 0; font-size: 13px; color: var(--ink-soft); }
+
+  .btn {
+    appearance: none; cursor: pointer; border-radius: 999px; font-weight: 700; font-size: 13.5px;
+    padding: 10px 18px; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 6px;
+    transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease, filter .15s ease;
+  }
+  .btn.primary { background: var(--accent-strong); color: var(--accent-strong-text); box-shadow: 0 3px 10px -4px rgba(198,48,42,.55); }
+  .btn.primary:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 6px 16px -6px rgba(198,48,42,.6); }
+  .btn.primary:active { transform: translateY(0) scale(.97); }
+  .btn.ghost { background: transparent; border-color: var(--line); color: var(--ink); }
+  .btn.ghost:hover { background: var(--surface-2); border-color: var(--accent); color: var(--accent-strong); transform: translateY(-1px); }
+  .btn.ghost:active { transform: translateY(0) scale(.97); }
+  .btn.small { padding: 7px 13px; font-size: 12.5px; }
+  .icon-btn {
+    appearance: none; cursor: pointer; background: transparent; border: none; color: var(--ink-faint);
+    width: 28px; height: 28px; border-radius: 8px; font-size: 13px; line-height: 1;
+    transition: transform .15s ease, background-color .15s ease, color .15s ease;
+  }
+  .icon-btn:hover { background: var(--accent-tint); color: var(--accent-strong); transform: scale(1.12); }
+  .icon-btn:active { transform: scale(.94); }
+
+  /* ---------- data table ---------- */
+  .table-wrap { overflow-x: auto; }
+  table.data-table { width: 100%; border-collapse: collapse; min-width: 480px; }
+  table.data-table th {
+    text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--ink-faint); font-weight: 600; padding: 0 10px 8px; border-bottom: 1px solid var(--line);
+  }
+  table.data-table td { padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  table.data-table tr:last-child td { border-bottom: none; }
+  table.data-table th.num, table.data-table td.num { text-align: right; }
+  table.data-table th.actions, table.data-table td.actions { width: 34px; padding-left: 4px; padding-right: 4px; }
+
+  .cell-input {
+    width: 100%; background: transparent; border: 1px solid transparent; border-radius: 7px;
+    padding: 6px 8px; min-width: 0; transition: border-color .15s ease, background-color .15s ease;
+  }
+  .cell-input:hover { border-color: var(--line); }
+  .cell-input:focus { border-color: var(--accent); background: var(--surface-2); outline: none; }
+  .cell-input.num { text-align: right; font-family: 'IBM Plex Mono', monospace; }
+  .cell-input.unit { width: 84px; }
+  .cell-input.price { width: 110px; }
+  select.cell-input { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--ink-faint) 50%), linear-gradient(135deg, var(--ink-faint) 50%, transparent 50%); background-position: calc(100% - 14px) center, calc(100% - 9px) center; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 26px; }
+
+  .empty-state { padding: 26px 10px; text-align: center; color: var(--ink-faint); font-size: 13.5px; }
+  .empty-state .emoji { display: block; font-size: 26px; margin-bottom: 6px; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .recipe-card { animation: cardIn .25s cubic-bezier(.16,1,.3,1) both; }
+    table.data-table tbody tr { animation: rowIn .2s ease both; }
+    .value-pulse { animation: valuePulse .5s ease; }
+  }
+  @keyframes cardIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes rowIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes valuePulse {
+    0% { background-color: var(--accent-tint); border-radius: 6px; }
+    100% { background-color: transparent; }
+  }
+
+  .pack-calc { display: flex; align-items: center; gap: 5px; }
+  .pack-calc .pack-field { width: 98px; flex: none; }
+  .pack-calc .price { width: 128px; flex: none; }
+  .pack-sep { color: var(--ink-faint); font-size: 13px; }
+  .pack-result {
+    font-size: 12.5px; color: var(--accent-strong); background: var(--accent-tint); border-radius: 6px;
+    padding: 4px 8px; white-space: nowrap; flex: none;
+  }
+
+  /* ---------- recipe cards ---------- */
+  #recipe-list { display: flex; flex-direction: column; gap: 14px; }
+  .recipe-card { display: flex; flex-direction: column; gap: 12px; }
+  .recipe-head { display: flex; align-items: center; gap: 10px; }
+  .recipe-name {
+    flex: 1; font-family: 'Baloo 2', sans-serif; font-size: 18px; font-weight: 600; background: transparent;
+    border: 1px solid transparent; border-radius: 7px; padding: 5px 8px; transition: border-color .15s ease;
+  }
+  .recipe-name:hover { border-color: var(--line); }
+  .recipe-name:focus { border-color: var(--accent); outline: none; background: var(--surface-2); }
+  .recipe-total { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13.5px; color: var(--ink-soft); border-top: 1px dashed var(--line); padding-top: 10px; flex-wrap: wrap; }
+  .recipe-total strong { color: var(--ink); font-size: 15px; }
+  .yield-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-soft); }
+  .yield-row input { width: 84px; }
+  .yield-row .unit-input { width: 70px; }
+  .computed-badge {
+    display: inline-flex; align-items: baseline; gap: 5px; background: var(--accent-tint); color: var(--accent-strong);
+    border-radius: 999px; padding: 3px 11px; font-size: 12.5px; font-weight: 600;
+  }
+  .computed-badge .mono { font-size: 13px; }
+  .batch-tag {
+    display: inline-block; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em;
+    color: var(--accent-strong); background: var(--accent-tint); border-radius: 5px; padding: 1px 6px; margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  /* ---------- calculator ---------- */
+  .calc-grid { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(280px,0.85fr); gap: 18px; align-items: start; }
+  @media (max-width: 720px) { .calc-grid { grid-template-columns: 1fr; } }
+  .calc-input > .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+  .calc-input label.field-label { font-size: 12px; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .05em; }
+  .field-input {
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm);
+    padding: 9px 11px; width: 100%; transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .field-input:focus { border-color: var(--accent); outline: none; }
+
+  .receipt { position: relative; padding-bottom: 30px; position: sticky; top: 16px; }
+  .receipt h3 { font-size: 17px; font-weight: 600; }
+  .receipt-name { font-size: 12.5px; color: var(--ink-soft); margin-top: 2px; padding-bottom: 12px; border-bottom: 1px dashed var(--line); }
+  .receipt-lines { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; min-height: 20px; }
+  .receipt-line { display: flex; align-items: flex-end; gap: 6px; font-size: 13.5px; }
+  .receipt-line .rl-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 62%; }
+  .receipt-line .rl-qty { color: var(--ink-faint); font-size: 12px; margin-left: 4px; }
+  .receipt-line .rl-fill { flex: 1; border-bottom: 1px dotted var(--line); margin-bottom: 4px; min-width: 8px; }
+  .receipt-line .rl-price { white-space: nowrap; }
+  .receipt-total-row {
+    display: flex; justify-content: space-between; align-items: baseline; font-weight: 700; font-size: 17px;
+    border-top: 2px dashed var(--accent); padding-top: 10px; margin-top: 2px; color: var(--accent-strong);
+  }
+  .receipt-total-row #receipt-total { border-radius: 6px; padding: 1px 4px; }
+  .receipt-sell { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 7px; }
+  .receipt-sell[hidden] { display: none; }
+  .receipt-row { display: flex; justify-content: space-between; font-size: 13.5px; color: var(--ink-soft); }
+  .receipt-row .val { color: var(--ink); font-weight: 600; }
+  .receipt-row .val.good { color: var(--good); }
+  .receipt-row .val.bad { color: var(--bad); }
+  .foodcost-pill {
+    display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 600; margin-left: 8px;
+  }
+  .foodcost-pill.good { background: var(--good-tint); color: var(--good); }
+  .foodcost-pill.bad { background: var(--bad-tint); color: var(--bad); }
+
+  .receipt::before {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 9px;
+    background-image:
+      linear-gradient(45deg, var(--paper) 50%, transparent 50%),
+      linear-gradient(-45deg, var(--paper) 50%, transparent 50%);
+    background-size: 16px 18px;
+    background-position: 0 100%, 8px 100%;
+    background-repeat: repeat-x;
+  }
+
+  .warn-flag { color: var(--bad); font-size: 12px; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="masthead">
+    <div class="title-block">
+      <h1>🧋 Cost Ly</h1>
+      <span class="tagline">Sổ tính giá vốn đồ uống</span>
+    </div>
+    <div class="sync-status" id="sync-status">
+      <span class="sync-dot" id="sync-dot"></span>
+      <span id="sync-label">Đang kết nối…</span>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab-btn active" data-tab="ingredients" role="tab">Nguyên liệu<span class="tab-count" id="count-ingredients"></span></button>
+    <button class="tab-btn" data-tab="batches" role="tab">Bán thành phẩm<span class="tab-count" id="count-batches"></span></button>
+    <button class="tab-btn" data-tab="recipes" role="tab">Công thức<span class="tab-count" id="count-recipes"></span></button>
+    <button class="tab-btn" data-tab="calc" role="tab">Tính cost</button>
+  </nav>
+
+  <main>
+    <!-- ============ INGREDIENTS ============ -->
+    <section class="panel active" id="tab-ingredients">
+      <div class="card">
+        <div class="toolbar">
+          <div class="toolbar-row">
+            <h2>Nguyên liệu &amp; đơn giá</h2>
+            <button class="btn primary" data-action="add-ingredient">+ Thêm nguyên liệu</button>
+          </div>
+          <p class="hint">Điền giá tiền cho mỗi đơn vị nguyên liệu — đây là dữ liệu gốc để tính cost mọi công thức. Chỉ biết giá mua theo gói? Bấm 🧮 cạnh ô giá để tự tính giá/đơn vị.</p>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" id="ingredients-table">
+            <thead>
+              <tr>
+                <th style="width:40%">Tên nguyên liệu</th>
+                <th style="width:20%">Đơn vị</th>
+                <th class="num" style="width:28%">Giá / đơn vị (đ)</th>
+                <th class="actions"></th>
+              </tr>
+            </thead>
+            <tbody id="ingredients-body"></tbody>
+          </table>
+          <div class="empty-state" id="ingredients-empty" hidden><span class="emoji">🧂</span>Chưa có nguyên liệu nào. Bấm "+ Thêm nguyên liệu" để bắt đầu.</div>
+        </div>
+      </div>
+      <datalist id="unit-list">
+        <option value="g"></option><option value="ml"></option><option value="kg"></option>
+        <option value="l"></option><option value="gói"></option><option value="quả"></option>
+        <option value="lon"></option><option value="viên"></option><option value="muỗng"></option>
+        <option value="lá"></option><option value="cây"></option><option value="trái"></option>
+      </datalist>
+    </section>
+
+    <!-- ============ BATCHES (bán thành phẩm / cốt) ============ -->
+    <section class="panel" id="tab-batches">
+      <div class="toolbar">
+        <div class="toolbar-row">
+          <h2>Bán thành phẩm (cốt)</h2>
+          <button class="btn primary" data-action="add-batch">+ Thêm cốt</button>
+        </div>
+        <p class="hint">Nấu cốt từ nguyên liệu thô + định lượng thành phẩm → giá vốn mỗi đơn vị được tự tính, dùng lại trong mọi công thức.</p>
+      </div>
+      <div id="batch-list"></div>
+      <div class="empty-state card" id="batches-empty" hidden><span class="emoji">🧪</span>Chưa có cốt nào. Bấm "+ Thêm cốt" để tạo bán thành phẩm đầu tiên (VD: cốt trà, cốt cafe).</div>
+    </section>
+
+    <!-- ============ RECIPES ============ -->
+    <section class="panel" id="tab-recipes">
+      <div class="toolbar">
+        <div class="toolbar-row">
+          <h2>Công thức pha chế</h2>
+          <button class="btn primary" data-action="add-recipe">+ Thêm công thức</button>
+        </div>
+        <p class="hint">Mỗi công thức là danh sách nguyên liệu và định lượng cho 1 ly.</p>
+      </div>
+      <div id="recipe-list"></div>
+      <div class="empty-state card" id="recipes-empty" hidden><span class="emoji">📋</span>Chưa có công thức nào. Bấm "+ Thêm công thức" để tạo công thức đầu tiên.</div>
+    </section>
+
+    <!-- ============ CALCULATOR ============ -->
+    <section class="panel" id="tab-calc">
+      <div class="calc-grid">
+        <div class="card calc-input">
+          <div class="field">
+            <label class="field-label" for="calc-recipe-select">Bắt đầu từ công thức</label>
+            <select class="field-input" id="calc-recipe-select">
+              <option value="">— Tự chọn nguyên liệu —</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table" id="calc-items-table">
+              <thead>
+                <tr>
+                  <th style="width:42%">Nguyên liệu</th>
+                  <th class="num" style="width:20%">Số lượng</th>
+                  <th style="width:14%">Đ.vị</th>
+                  <th class="num" style="width:24%">Cost</th>
+                  <th class="actions"></th>
+                </tr>
+              </thead>
+              <tbody id="calc-items-body"></tbody>
+            </table>
+            <div class="empty-state" id="calc-empty" hidden><span class="emoji">🥤</span>Chưa có nguyên liệu — chọn công thức ở trên hoặc thêm thủ công.</div>
+          </div>
+          <div style="margin-top:6px;">
+            <button class="btn ghost small" data-action="calc-add-item">+ Thêm nguyên liệu</button>
+          </div>
+          <div class="field" style="margin-top:18px;">
+            <label class="field-label" for="calc-sell-price">Giá bán dự kiến (đ)</label>
+            <input class="field-input mono money-input" type="text" inputmode="numeric" id="calc-sell-price" placeholder="VD: 35.000">
+          </div>
+        </div>
+
+        <div class="card receipt" id="calc-receipt">
+          <h3>Hoá đơn giá vốn</h3>
+          <div class="receipt-name" id="receipt-recipe-name">Tự chọn nguyên liệu</div>
+          <div class="receipt-lines" id="receipt-lines"></div>
+          <div class="receipt-total-row"><span>Tổng giá vốn</span><span class="mono" id="receipt-total">0 đ</span></div>
+          <div class="receipt-sell" id="receipt-sell-block" hidden>
+            <div class="receipt-row"><span>Giá bán</span><span class="val mono" id="receipt-sell">0 đ</span></div>
+            <div class="receipt-row"><span>Lãi gộp / ly</span><span class="val mono" id="receipt-profit">0 đ</span></div>
+            <div class="receipt-row"><span>Tỷ lệ giá vốn (food cost)</span><span class="val mono" id="receipt-foodcost-pct">0%<span class="foodcost-pill" id="foodcost-pill"></span></span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------------------------------------------------------------
+  // state
+  // ---------------------------------------------------------------
+  let ingredients = [];   // {id, name, unit, price} — raw, hand-priced
+  let batches = [];       // {id, name, items:[{id, ingredientId, qty}], yieldQty, yieldUnit} — bán thành phẩm / cốt, price auto-computed
+  let recipes = [];       // {id, name, items:[{id, ingredientId, qty}]} — ingredientId may point at a raw ingredient OR a batch
+  let calcItems = [];     // {id, ingredientId, qty} — scratchpad, not persisted
+  let lastReceiptTotal = null; // drives the "value-pulse" flash when the total changes
+
+  const $ = (sel, root) => (root || document).querySelector(sel);
+  const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "id-" + Math.random().toString(36).slice(2) + Date.now());
+  const fmtVND = (n) => (Math.round(n || 0)).toLocaleString("vi-VN") + " đ";
+  const fmtNum = (n) => (Math.round(n) || 0).toLocaleString("vi-VN");
+  // money inputs are type="text" so we can show live thousand-separators while typing;
+  // strip everything but digits to get the real number back out.
+  const parseMoneyInput = (s) => { const d = String(s || "").replace(/[^\d]/g, ""); return d ? parseInt(d, 10) : 0; };
+  function formatMoneyLive(el) {
+    const raw = parseMoneyInput(el.value);
+    el.value = fmtNum(raw);
+    const len = el.value.length;
+    try { el.setSelectionRange(len, len); } catch (e) {}
+  }
+  const findIngredient = (id) => ingredients.find((i) => i.id === id);
+  const findBatch = (id) => batches.find((b) => b.id === id);
+
+  // a batch's cost per unit of its own yield, derived from its raw-ingredient sub-recipe
+  function batchUnitCost(batch) {
+    const total = batch.items.reduce((sum, it) => {
+      const ing = findIngredient(it.ingredientId);
+      return sum + (ing ? ing.price * it.qty : 0);
+    }, 0);
+    return batch.yieldQty > 0 ? total / batch.yieldQty : 0;
+  }
+  function batchTotalCost(batch) {
+    return batch.items.reduce((sum, it) => {
+      const ing = findIngredient(it.ingredientId);
+      return sum + (ing ? ing.price * it.qty : 0);
+    }, 0);
+  }
+
+  // resolves a recipe/calc line's ingredientId against raw ingredients first, then batches
+  function resolvePriceable(id) {
+    const ing = findIngredient(id);
+    if (ing) return { name: ing.name, unit: ing.unit, price: ing.price, isBatch: false };
+    const b = findBatch(id);
+    if (b) return { name: b.name, unit: b.yieldUnit, price: batchUnitCost(b), isBatch: true };
+    return null;
+  }
+
+  // ---------------------------------------------------------------
+  // unit picker — a preset dropdown with a "type your own" escape hatch
+  // ---------------------------------------------------------------
+  const UNIT_PRESETS = ["g", "kg", "ml", "l", "gói", "quả", "trái", "lon", "hộp", "viên", "muỗng", "lá", "cây"];
+  const customUnitMode = new Set(); // keys like "ing:<id>" or "batch:<id>" forced into manual text entry
+
+  function unitCellHtml(value, key, fieldName, extraClass) {
+    const isCustom = customUnitMode.has(key) || (value && !UNIT_PRESETS.includes(value));
+    if (isCustom) {
+      return `<input class="cell-input unit ${extraClass || ""}" data-field="${fieldName}" data-unit-custom="1" type="text" value="${escapeAttr(value)}" placeholder="Nhập đơn vị…">`;
+    }
+    const options = UNIT_PRESETS.map((u) => `<option value="${u}" ${u === value ? "selected" : ""}>${u}</option>`).join("");
+    const blank = value ? "" : `<option value="" disabled selected>— chọn —</option>`;
+    return `<select class="cell-input unit ${extraClass || ""}" data-field="${fieldName}">${blank}${options}<option value="__custom__">✏️ Nhập khác…</option></select>`;
+  }
+  // call after a unit <select> fires change with value "__custom__": flips that row into manual entry and refocuses it
+  function switchUnitToCustom(key, rerender, focusSelector) {
+    customUnitMode.add(key);
+    rerender();
+    setTimeout(() => {
+      const el = document.querySelector(focusSelector);
+      if (el) el.focus();
+    }, 30);
+  }
+
+  // ---------------------------------------------------------------
+  // persistence — REST API backed by this app's own Postgres, with a
+  // localStorage cache as a fallback if the API is unreachable.
+  // ---------------------------------------------------------------
+  const API_BASE = "/api";
+  const LS_ING = "costly_ingredients";
+  const LS_BATCH = "costly_batches";
+  const LS_REC = "costly_recipes";
+
+  function lsLoad() {
+    try {
+      ingredients = JSON.parse(localStorage.getItem(LS_ING) || "[]");
+      batches = JSON.parse(localStorage.getItem(LS_BATCH) || "[]");
+      recipes = JSON.parse(localStorage.getItem(LS_REC) || "[]");
+    } catch (e) { ingredients = []; batches = []; recipes = []; }
+  }
+  function lsSaveIngredients() { try { localStorage.setItem(LS_ING, JSON.stringify(ingredients)); } catch (e) {} }
+  function lsSaveBatches() { try { localStorage.setItem(LS_BATCH, JSON.stringify(batches)); } catch (e) {} }
+  function lsSaveRecipes() { try { localStorage.setItem(LS_REC, JSON.stringify(recipes)); } catch (e) {} }
+
+  async function apiList(collection) {
+    const res = await fetch(`${API_BASE}/${collection}`);
+    if (!res.ok) throw new Error("list failed: " + collection);
+    return res.json();
+  }
+  function apiSet(collection, id, data) {
+    return fetch(`${API_BASE}/${collection}/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+  }
+  function apiDelete(collection, id) {
+    return fetch(`${API_BASE}/${collection}/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
+  function setSyncStatus(mode) {
+    const dot = $("#sync-dot"), label = $("#sync-label");
+    if (mode === "db") {
+      dot.className = "sync-dot on";
+      label.textContent = "Đã lưu — đồng bộ mọi thiết bị";
+    } else if (mode === "local") {
+      dot.className = "sync-dot local";
+      label.textContent = "Đã lưu trên trình duyệt này";
+    } else {
+      dot.className = "sync-dot";
+      label.textContent = "Đang kết nối…";
+    }
+  }
+
+  let apiReady = false;
+
+  async function initStore() {
+    try {
+      const [ing, bat, rec] = await Promise.all([apiList("ingredients"), apiList("batches"), apiList("recipes")]);
+      ingredients = ing; batches = bat; recipes = rec;
+      apiReady = true;
+      setSyncStatus("db");
+    } catch (e) {
+      lsLoad();
+      setSyncStatus("local");
+    }
+    renderIngredients();
+    renderBatches();
+    renderRecipes();
+    renderCalcRecipeOptions();
+    renderCalc();
+  }
+
+  // refetch from the server when the tab regains focus, so multiple
+  // devices stay reasonably in sync — but never while someone is mid-edit.
+  function isEditingAnything() {
+    const el = document.activeElement;
+    if (!el) return false;
+    if (el.tagName !== "INPUT" && el.tagName !== "SELECT") return false;
+    return ingredientsBody.contains(el) || batchList.contains(el) || recipeList.contains(el) || calcBody.contains(el) || el === sellPriceInput;
+  }
+  async function refreshFromServer() {
+    if (!apiReady || isEditingAnything()) return;
+    try {
+      const [ing, bat, rec] = await Promise.all([apiList("ingredients"), apiList("batches"), apiList("recipes")]);
+      ingredients = ing; batches = bat; recipes = rec;
+      renderIngredients();
+      renderBatches();
+      renderRecipes();
+      renderCalcRecipeOptions();
+      renderCalc();
+    } catch (e) {}
+  }
+
+  function saveIngredient(ing) {
+    const i = ingredients.findIndex((x) => x.id === ing.id);
+    if (i >= 0) ingredients[i] = ing; else ingredients.push(ing);
+    lsSaveIngredients();
+    if (apiReady) {
+      apiSet("ingredients", ing.id, { name: ing.name, unit: ing.unit, price: ing.price, packagePrice: ing.packagePrice || 0, packageQty: ing.packageQty || 0 }).catch(() => {});
+    }
+  }
+  function deleteIngredientRemote(id) {
+    ingredients = ingredients.filter((x) => x.id !== id);
+    lsSaveIngredients();
+    if (apiReady) apiDelete("ingredients", id).catch(() => {});
+  }
+  function saveBatch(batch) {
+    const i = batches.findIndex((x) => x.id === batch.id);
+    if (i >= 0) batches[i] = batch; else batches.push(batch);
+    lsSaveBatches();
+    if (apiReady) apiSet("batches", batch.id, { name: batch.name, items: batch.items, yieldQty: batch.yieldQty, yieldUnit: batch.yieldUnit }).catch(() => {});
+  }
+  function deleteBatchRemote(id) {
+    batches = batches.filter((x) => x.id !== id);
+    lsSaveBatches();
+    if (apiReady) apiDelete("batches", id).catch(() => {});
+  }
+  function saveRecipe(recipe) {
+    const i = recipes.findIndex((x) => x.id === recipe.id);
+    if (i >= 0) recipes[i] = recipe; else recipes.push(recipe);
+    lsSaveRecipes();
+    if (apiReady) apiSet("recipes", recipe.id, { name: recipe.name, items: recipe.items }).catch(() => {});
+  }
+  function deleteRecipeRemote(id) {
+    recipes = recipes.filter((x) => x.id !== id);
+    lsSaveRecipes();
+    if (apiReady) apiDelete("recipes", id).catch(() => {});
+  }
+
+  // ---------------------------------------------------------------
+  // tabs
+  // ---------------------------------------------------------------
+  $$(".tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const activeTab = btn.dataset.tab;
+      $$(".tab-btn").forEach((b) => b.classList.toggle("active", b === btn));
+      $$(".panel").forEach((p) => p.classList.toggle("active", p.id === "tab-" + activeTab));
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // ingredients tab
+  // ---------------------------------------------------------------
+  const ingredientsBody = $("#ingredients-body");
+  const packageCalcMode = new Set(); // ingredient ids currently showing the "giá theo gói" calculator
+
+  function priceCellHtml(ing) {
+    const isPackage = packageCalcMode.has(ing.id) || ing.packageQty > 0;
+    if (isPackage) {
+      return `<div class="pack-calc">
+        <input class="cell-input num pack-field money-input" data-field="packagePrice" type="text" inputmode="numeric" value="${fmtNum(ing.packagePrice || 0)}" placeholder="Giá gói">
+        <span class="pack-sep">/</span>
+        <input class="cell-input num pack-field" data-field="packageQty" type="number" min="0" step="any" value="${ing.packageQty || 0}" placeholder="K.lượng">
+        <span class="pack-result mono">= ${fmtVND(ing.price)}</span>
+        <button class="icon-btn" data-action="price-direct" title="Nhập giá trực tiếp theo đơn vị">↩</button>
+      </div>`;
+    }
+    return `<div class="pack-calc">
+      <input class="cell-input num price money-input" data-field="price" type="text" inputmode="numeric" value="${fmtNum(ing.price)}" placeholder="0">
+      <button class="icon-btn" data-action="price-package" title="Tính giá từ giá mua theo gói">🧮</button>
+    </div>`;
+  }
+
+  function renderIngredients() {
+    $("#count-ingredients").textContent = ingredients.length ? " " + ingredients.length : "";
+    $("#ingredients-empty").hidden = ingredients.length > 0;
+    ingredientsBody.innerHTML = ingredients.map((ing) => `
+      <tr data-id="${ing.id}">
+        <td><input class="cell-input" data-field="name" type="text" value="${escapeAttr(ing.name)}" placeholder="VD: Trà đen"></td>
+        <td>${unitCellHtml(ing.unit, "ing:" + ing.id, "unit")}</td>
+        <td>${priceCellHtml(ing)}</td>
+        <td class="actions"><button class="icon-btn" data-action="delete-ingredient" title="Xoá nguyên liệu">✕</button></td>
+      </tr>`).join("");
+  }
+
+  ingredientsBody.addEventListener("input", (e) => {
+    if (e.target.classList.contains("money-input")) formatMoneyLive(e.target);
+  });
+  // select the whole number on focus so typing a new price doesn't have to fight the old one
+  ingredientsBody.addEventListener("focus", (e) => {
+    if (e.target.classList && e.target.classList.contains("money-input")) e.target.select();
+  }, true);
+
+  ingredientsBody.addEventListener("change", (e) => {
+    const tr = e.target.closest("tr");
+    if (!tr) return;
+    const ing = findIngredient(tr.dataset.id);
+    if (!ing) return;
+    const field = e.target.dataset.field;
+    if (!field) return;
+    if (field === "unit" && e.target.value === "__custom__") {
+      switchUnitToCustom("ing:" + ing.id, renderIngredients, `tr[data-id="${ing.id}"] .unit`);
+      return;
+    }
+    if (field === "packagePrice" || field === "packageQty") {
+      ing[field] = field === "packagePrice" ? parseMoneyInput(e.target.value) : (Number(e.target.value) || 0);
+      if (ing.packageQty > 0) ing.price = ing.packagePrice / ing.packageQty;
+      saveIngredient(ing);
+      renderIngredients();
+      renderBatches();
+      renderRecipes();
+      renderCalc();
+      return;
+    }
+    ing[field] = field === "price" ? parseMoneyInput(e.target.value) : e.target.value;
+    saveIngredient(ing);
+    renderBatches();
+    renderRecipes();
+    renderCalc();
+  });
+
+  ingredientsBody.addEventListener("click", (e) => {
+    const action = e.target.dataset.action;
+    if (!action) return;
+    const tr = e.target.closest("tr");
+    if (!tr) return;
+    if (action === "delete-ingredient") {
+      deleteIngredientRemote(tr.dataset.id);
+      renderIngredients();
+      renderBatches();
+      renderRecipes();
+      renderCalc();
+      return;
+    }
+    const ing = findIngredient(tr.dataset.id);
+    if (!ing) return;
+    if (action === "price-package") {
+      packageCalcMode.add(ing.id);
+      renderIngredients();
+      setTimeout(() => {
+        const el = ingredientsBody.querySelector(`tr[data-id="${ing.id}"] .pack-field`);
+        if (el) el.focus();
+      }, 30);
+      return;
+    }
+    if (action === "price-direct") {
+      packageCalcMode.delete(ing.id);
+      ing.packagePrice = 0;
+      ing.packageQty = 0;
+      saveIngredient(ing);
+      renderIngredients();
+      return;
+    }
+  });
+
+  $('[data-action="add-ingredient"]').addEventListener("click", () => {
+    const ing = { id: uid(), name: "", unit: "", price: 0 };
+    saveIngredient(ing);
+    renderIngredients();
+    renderBatches();
+    renderRecipes();
+    renderCalc();
+    setTimeout(() => {
+      const row = ingredientsBody.querySelector(`tr[data-id="${ing.id}"] input`);
+      if (row) row.focus();
+    }, 60);
+  });
+
+  function escapeAttr(s) {
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  }
+
+  // ---------------------------------------------------------------
+  // recipes tab
+  // ---------------------------------------------------------------
+  const recipeList = $("#recipe-list");
+
+  // includeBatches=true lists batches too (grouped) — used for recipe/calc lines.
+  // Batch item selects pass includeBatches=false since a batch can't reference another batch.
+  function ingredientOptionsHtml(selectedId, includeBatches) {
+    if (!ingredients.length && !(includeBatches && batches.length)) {
+      return `<option value="">— chưa có nguyên liệu —</option>`;
+    }
+    const rawOptions = ingredients.map((i) =>
+      `<option value="${i.id}" ${i.id === selectedId ? "selected" : ""}>${escapeAttr(i.name || "(chưa đặt tên)")}</option>`
+    ).join("");
+    if (!includeBatches) return rawOptions;
+    const batchOptions = batches.map((b) =>
+      `<option value="${b.id}" ${b.id === selectedId ? "selected" : ""}>${escapeAttr(b.name || "(chưa đặt tên)")} (cốt)</option>`
+    ).join("");
+    let html = "";
+    if (rawOptions) html += `<optgroup label="Nguyên liệu">${rawOptions}</optgroup>`;
+    if (batchOptions) html += `<optgroup label="Bán thành phẩm (cốt)">${batchOptions}</optgroup>`;
+    return html;
+  }
+
+  function recipeTotal(recipe) {
+    return recipe.items.reduce((sum, it) => {
+      const p = resolvePriceable(it.ingredientId);
+      return sum + (p ? p.price * it.qty : 0);
+    }, 0);
+  }
+
+  // ---------------------------------------------------------------
+  // batches tab (bán thành phẩm / cốt)
+  // ---------------------------------------------------------------
+  const batchList = $("#batch-list");
+
+  function renderBatches() {
+    $("#count-batches").textContent = batches.length ? " " + batches.length : "";
+    $("#batches-empty").hidden = batches.length > 0;
+    batchList.innerHTML = batches.map((b) => {
+      const unitCost = batchUnitCost(b);
+      return `
+      <article class="recipe-card card" data-batch-id="${b.id}">
+        <div class="recipe-head">
+          <input class="recipe-name" data-field="name" type="text" value="${escapeAttr(b.name)}" placeholder="Tên cốt, VD: Cốt trà chanh">
+          <button class="btn ghost small" data-action="delete-batch">Xoá cốt</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th style="width:42%">Nguyên liệu thô</th>
+              <th class="num" style="width:20%">Định lượng</th>
+              <th style="width:14%">Đ.vị</th>
+              <th class="num" style="width:20%">Cost</th>
+              <th class="actions"></th>
+            </tr></thead>
+            <tbody>
+              ${b.items.map((it) => {
+                const ing = findIngredient(it.ingredientId);
+                const cost = ing ? ing.price * it.qty : 0;
+                return `<tr data-item-id="${it.id}">
+                  <td><select class="cell-input" data-field="ingredientId">${ingredientOptionsHtml(it.ingredientId, false)}</select></td>
+                  <td><input class="cell-input num" data-field="qty" type="number" min="0" step="any" value="${it.qty}"></td>
+                  <td class="mono" style="color:var(--ink-faint)">${ing ? escapeAttr(ing.unit) : "–"}</td>
+                  <td class="num mono line-cost">${fmtVND(cost)}</td>
+                  <td class="actions"><button class="icon-btn" data-action="delete-item" title="Xoá nguyên liệu">✕</button></td>
+                </tr>`;
+              }).join("") || `<tr><td colspan="5" style="color:var(--ink-faint); font-size:13px; padding:12px 10px;">Chưa có nguyên liệu nào.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <button class="btn ghost small" data-action="add-item">+ Thêm nguyên liệu</button>
+          <div class="yield-row">
+            Ra thành phẩm
+            <input class="cell-input num" data-field="yieldQty" type="number" min="0" step="any" value="${b.yieldQty}">
+            ${unitCellHtml(b.yieldUnit, "batch:" + b.id, "yieldUnit", "unit-input")}
+          </div>
+        </div>
+        <div class="recipe-total">
+          <span>Tổng nguyên liệu <strong class="mono">${fmtVND(batchTotalCost(b))}</strong></span>
+          <span class="computed-badge">Giá vốn / ${escapeAttr(b.yieldUnit || "đ.vị")} <span class="mono">${fmtVND(unitCost)}</span></span>
+        </div>
+      </article>`;
+    }).join("");
+  }
+
+  batchList.addEventListener("change", (e) => {
+    const card = e.target.closest(".recipe-card");
+    if (!card) return;
+    const batch = batches.find((b) => b.id === card.dataset.batchId);
+    if (!batch) return;
+    if (e.target.classList.contains("recipe-name")) {
+      batch.name = e.target.value;
+      saveBatch(batch);
+      return;
+    }
+    if (e.target.dataset.field === "yieldUnit" && e.target.value === "__custom__") {
+      switchUnitToCustom("batch:" + batch.id, renderBatches, `.recipe-card[data-batch-id="${batch.id}"] .unit`);
+      return;
+    }
+    if (e.target.dataset.field === "yieldQty" || e.target.dataset.field === "yieldUnit") {
+      batch[e.target.dataset.field] = e.target.dataset.field === "yieldQty" ? (Number(e.target.value) || 0) : e.target.value;
+      saveBatch(batch);
+      renderBatches();
+      renderRecipes();
+      renderCalc();
+      return;
+    }
+    const tr = e.target.closest("tr[data-item-id]");
+    if (tr) {
+      const item = batch.items.find((it) => it.id === tr.dataset.itemId);
+      if (!item) return;
+      const field = e.target.dataset.field;
+      item[field] = field === "qty" ? (Number(e.target.value) || 0) : e.target.value;
+      saveBatch(batch);
+      renderBatches();
+      renderRecipes();
+      renderCalc();
+    }
+  });
+
+  batchList.addEventListener("click", (e) => {
+    const card = e.target.closest(".recipe-card");
+    if (!card) return;
+    const batch = batches.find((b) => b.id === card.dataset.batchId);
+    if (!batch) return;
+    if (e.target.dataset.action === "delete-batch") {
+      deleteBatchRemote(batch.id);
+      renderBatches();
+      renderRecipes();
+      renderCalc();
+      return;
+    }
+    if (e.target.dataset.action === "add-item") {
+      batch.items.push({ id: uid(), ingredientId: ingredients[0] ? ingredients[0].id : "", qty: 0 });
+      saveBatch(batch);
+      renderBatches();
+      renderRecipes();
+      renderCalc();
+      return;
+    }
+    if (e.target.dataset.action === "delete-item") {
+      const tr = e.target.closest("tr[data-item-id]");
+      batch.items = batch.items.filter((it) => it.id !== tr.dataset.itemId);
+      saveBatch(batch);
+      renderBatches();
+      renderRecipes();
+      renderCalc();
+    }
+  });
+
+  $('[data-action="add-batch"]').addEventListener("click", () => {
+    const batch = { id: uid(), name: "", items: [], yieldQty: 0, yieldUnit: "ml" };
+    saveBatch(batch);
+    renderBatches();
+    setTimeout(() => {
+      const el = batchList.querySelector(`.recipe-card[data-batch-id="${batch.id}"] .recipe-name`);
+      if (el) el.focus();
+    }, 60);
+  });
+
+  function renderRecipes() {
+    $("#count-recipes").textContent = recipes.length ? " " + recipes.length : "";
+    $("#recipes-empty").hidden = recipes.length > 0;
+    recipeList.innerHTML = recipes.map((r) => `
+      <article class="recipe-card card" data-recipe-id="${r.id}">
+        <div class="recipe-head">
+          <input class="recipe-name" data-field="name" type="text" value="${escapeAttr(r.name)}" placeholder="Tên đồ uống, VD: Trà sữa trân châu">
+          <button class="btn ghost small" data-action="delete-recipe">Xoá công thức</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th style="width:42%">Nguyên liệu</th>
+              <th class="num" style="width:20%">Định lượng</th>
+              <th style="width:14%">Đ.vị</th>
+              <th class="num" style="width:20%">Cost</th>
+              <th class="actions"></th>
+            </tr></thead>
+            <tbody>
+              ${r.items.map((it) => {
+                const p = resolvePriceable(it.ingredientId);
+                const cost = p ? p.price * it.qty : 0;
+                return `<tr data-item-id="${it.id}">
+                  <td><select class="cell-input" data-field="ingredientId">${ingredientOptionsHtml(it.ingredientId, true)}</select>${p && p.isBatch ? '<span class="batch-tag">cốt</span>' : ""}</td>
+                  <td><input class="cell-input num" data-field="qty" type="number" min="0" step="any" value="${it.qty}"></td>
+                  <td class="mono" style="color:var(--ink-faint)">${p ? escapeAttr(p.unit) : "–"}</td>
+                  <td class="num mono line-cost">${fmtVND(cost)}</td>
+                  <td class="actions"><button class="icon-btn" data-action="delete-item" title="Xoá thành phần">✕</button></td>
+                </tr>`;
+              }).join("") || `<tr><td colspan="5" style="color:var(--ink-faint); font-size:13px; padding:12px 10px;">Chưa có thành phần nào.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <button class="btn ghost small" data-action="add-item">+ Thêm thành phần</button>
+          <div class="recipe-total">Giá vốn / ly <strong class="mono">${fmtVND(recipeTotal(r))}</strong></div>
+        </div>
+      </article>
+    `).join("");
+  }
+
+  recipeList.addEventListener("change", (e) => {
+    const card = e.target.closest(".recipe-card");
+    if (!card) return;
+    const recipe = recipes.find((r) => r.id === card.dataset.recipeId);
+    if (!recipe) return;
+    if (e.target.classList.contains("recipe-name")) {
+      recipe.name = e.target.value;
+      saveRecipe(recipe);
+      return;
+    }
+    const tr = e.target.closest("tr[data-item-id]");
+    if (tr) {
+      const item = recipe.items.find((it) => it.id === tr.dataset.itemId);
+      if (!item) return;
+      const field = e.target.dataset.field;
+      item[field] = field === "qty" ? (Number(e.target.value) || 0) : e.target.value;
+      saveRecipe(recipe);
+      renderRecipes();
+      renderCalc();
+    }
+  });
+
+  recipeList.addEventListener("click", (e) => {
+    const card = e.target.closest(".recipe-card");
+    if (!card) return;
+    const recipe = recipes.find((r) => r.id === card.dataset.recipeId);
+    if (!recipe) return;
+    if (e.target.dataset.action === "delete-recipe") {
+      deleteRecipeRemote(recipe.id);
+      renderRecipes();
+      renderCalcRecipeOptions();
+      return;
+    }
+    if (e.target.dataset.action === "add-item") {
+      recipe.items.push({ id: uid(), ingredientId: ingredients[0] ? ingredients[0].id : "", qty: 0 });
+      saveRecipe(recipe);
+      renderRecipes();
+      return;
+    }
+    if (e.target.dataset.action === "delete-item") {
+      const tr = e.target.closest("tr[data-item-id]");
+      recipe.items = recipe.items.filter((it) => it.id !== tr.dataset.itemId);
+      saveRecipe(recipe);
+      renderRecipes();
+      renderCalc();
+    }
+  });
+
+  $('[data-action="add-recipe"]').addEventListener("click", () => {
+    const recipe = { id: uid(), name: "", items: [] };
+    saveRecipe(recipe);
+    renderRecipes();
+    renderCalcRecipeOptions();
+    setTimeout(() => {
+      const el = recipeList.querySelector(`.recipe-card[data-recipe-id="${recipe.id}"] .recipe-name`);
+      if (el) el.focus();
+    }, 60);
+  });
+
+  // ---------------------------------------------------------------
+  // calculator tab
+  // ---------------------------------------------------------------
+  const calcSelect = $("#calc-recipe-select");
+  const calcBody = $("#calc-items-body");
+  const sellPriceInput = $("#calc-sell-price");
+
+  function renderCalcRecipeOptions() {
+    const current = calcSelect.value;
+    calcSelect.innerHTML = `<option value="">— Tự chọn nguyên liệu —</option>` +
+      recipes.map((r) => `<option value="${r.id}">${escapeAttr(r.name || "(chưa đặt tên)")}</option>`).join("");
+    if (recipes.some((r) => r.id === current)) calcSelect.value = current;
+  }
+
+  calcSelect.addEventListener("change", () => {
+    const recipe = recipes.find((r) => r.id === calcSelect.value);
+    if (recipe) {
+      calcItems = recipe.items.map((it) => ({ id: uid(), ingredientId: it.ingredientId, qty: it.qty }));
+      $("#receipt-recipe-name").textContent = recipe.name || "(chưa đặt tên)";
+    } else {
+      calcItems = [];
+      $("#receipt-recipe-name").textContent = "Tự chọn nguyên liệu";
+    }
+    renderCalc();
+  });
+
+  function renderCalcItemsTable() {
+    $("#calc-empty").hidden = calcItems.length > 0;
+    calcBody.innerHTML = calcItems.map((it) => {
+      const p = resolvePriceable(it.ingredientId);
+      const cost = p ? p.price * it.qty : 0;
+      return `<tr data-item-id="${it.id}">
+        <td><select class="cell-input" data-field="ingredientId">${ingredientOptionsHtml(it.ingredientId, true)}</select>${p && p.isBatch ? '<span class="batch-tag">cốt</span>' : ""}</td>
+        <td><input class="cell-input num" data-field="qty" type="number" min="0" step="any" value="${it.qty}"></td>
+        <td class="mono" style="color:var(--ink-faint)">${p ? escapeAttr(p.unit) : "–"}</td>
+        <td class="num mono line-cost">${fmtVND(cost)}</td>
+        <td class="actions"><button class="icon-btn" data-action="calc-delete-item" title="Xoá">✕</button></td>
+      </tr>`;
+    }).join("");
+  }
+
+  function renderReceipt() {
+    const lines = calcItems.map((it) => {
+      const p = resolvePriceable(it.ingredientId);
+      const cost = p ? p.price * it.qty : 0;
+      const name = p ? (p.name || "(chưa đặt tên)") : "⚠ đã xoá";
+      const unit = p ? p.unit : "";
+      return `<div class="receipt-line">
+        <span class="rl-name">${escapeAttr(name)}<span class="rl-qty">×${it.qty}${escapeAttr(unit)}</span></span>
+        <span class="rl-fill"></span>
+        <span class="rl-price mono">${fmtVND(cost)}</span>
+      </div>`;
+    }).join("");
+    $("#receipt-lines").innerHTML = lines || `<div style="color:var(--ink-faint); font-size:13px;">Chưa có nguyên liệu nào.</div>`;
+
+    const total = calcItems.reduce((sum, it) => {
+      const p = resolvePriceable(it.ingredientId);
+      return sum + (p ? p.price * it.qty : 0);
+    }, 0);
+    const totalEl = $("#receipt-total");
+    if (lastReceiptTotal !== null && Math.round(total) !== lastReceiptTotal) {
+      totalEl.classList.remove("value-pulse");
+      void totalEl.offsetWidth; // restart the animation
+      totalEl.classList.add("value-pulse");
+    }
+    lastReceiptTotal = Math.round(total);
+    totalEl.textContent = fmtVND(total);
+
+    const sell = parseMoneyInput(sellPriceInput.value);
+    const sellBlock = $("#receipt-sell-block");
+    if (sell > 0) {
+      sellBlock.hidden = false;
+      const profit = sell - total;
+      const pct = sell > 0 ? (total / sell) * 100 : 0;
+      $("#receipt-sell").textContent = fmtVND(sell);
+      const profitEl = $("#receipt-profit");
+      profitEl.textContent = fmtVND(profit);
+      profitEl.className = "val mono " + (profit >= 0 ? "good" : "bad");
+      $("#receipt-foodcost-pct").firstChild.textContent = pct.toFixed(1) + "% ";
+      const pill = $("#foodcost-pill");
+      const good = pct <= 35;
+      pill.className = "foodcost-pill " + (good ? "good" : "bad");
+      pill.textContent = good ? "Ổn" : "Cao";
+    } else {
+      sellBlock.hidden = true;
+    }
+  }
+
+  function renderCalc() {
+    renderCalcItemsTable();
+    renderReceipt();
+  }
+
+  calcBody.addEventListener("input", (e) => {
+    if (e.target.dataset.field !== "qty") return;
+    const tr = e.target.closest("tr");
+    const item = calcItems.find((it) => it.id === tr.dataset.itemId);
+    if (!item) return;
+    item.qty = Number(e.target.value) || 0;
+    const p = resolvePriceable(item.ingredientId);
+    tr.querySelector(".line-cost").textContent = fmtVND(p ? p.price * item.qty : 0);
+    renderReceipt();
+  });
+  calcBody.addEventListener("change", (e) => {
+    if (e.target.dataset.field !== "ingredientId") return;
+    const tr = e.target.closest("tr");
+    const item = calcItems.find((it) => it.id === tr.dataset.itemId);
+    if (!item) return;
+    item.ingredientId = e.target.value;
+    renderCalc();
+  });
+  calcBody.addEventListener("click", (e) => {
+    if (e.target.dataset.action !== "calc-delete-item") return;
+    const tr = e.target.closest("tr");
+    calcItems = calcItems.filter((it) => it.id !== tr.dataset.itemId);
+    renderCalc();
+  });
+
+  $('[data-action="calc-add-item"]').addEventListener("click", () => {
+    calcItems.push({ id: uid(), ingredientId: ingredients[0] ? ingredients[0].id : "", qty: 0 });
+    renderCalc();
+  });
+
+  sellPriceInput.addEventListener("input", () => {
+    formatMoneyLive(sellPriceInput);
+    renderReceipt();
+  });
+  sellPriceInput.addEventListener("focus", () => sellPriceInput.select());
+
+  // ---------------------------------------------------------------
+  // boot
+  // ---------------------------------------------------------------
+  initStore();
+  window.addEventListener("focus", refreshFromServer);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") refreshFromServer();
+  });
+})();
+</script>
+</body>
+</html>
