@@ -330,6 +330,24 @@
   }
   .user-badge button { background: none; border: none; color: var(--ink-faint); font-size: 12.5px; cursor: pointer; text-decoration: underline; padding: 0; }
   .user-badge button:hover { color: var(--accent-strong); }
+
+  /* ---------- modal (change password) ---------- */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(43,22,22,.45); z-index: 50;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-card {
+    width: 100%; max-width: 360px; background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px 26px;
+  }
+  .modal-card h3 { font-size: 19px; margin-bottom: 16px; }
+  .modal-card form { display: flex; flex-direction: column; gap: 12px; }
+  .modal-card label { font-size: 12px; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .05em; }
+  .modal-card .field { display: flex; flex-direction: column; gap: 5px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+  .modal-msg { border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+  .modal-msg.error { color: var(--accent-strong); background: var(--accent-tint); }
+  .modal-msg.success { color: var(--good); background: var(--good-tint); }
 </style>
 </head>
 <body>
@@ -363,6 +381,7 @@
       <div class="user-badge" id="user-badge">
         <span id="user-badge-name"></span>
         <span class="role-pill" id="user-badge-role"></span>
+        <button type="button" id="change-password-btn">Đổi mật khẩu</button>
         <button type="button" id="logout-btn">Đăng xuất</button>
       </div>
       <div class="sync-status" id="sync-status">
@@ -487,6 +506,32 @@
       </div>
     </section>
   </main>
+</div>
+
+<div class="modal-overlay" id="change-password-overlay" hidden>
+  <div class="modal-card">
+    <h3>Đổi mật khẩu</h3>
+    <form id="change-password-form">
+      <div class="field">
+        <label for="cp-current">Mật khẩu hiện tại</label>
+        <input class="field-input" id="cp-current" type="password" autocomplete="current-password" required>
+      </div>
+      <div class="field">
+        <label for="cp-new">Mật khẩu mới</label>
+        <input class="field-input" id="cp-new" type="password" autocomplete="new-password" minlength="6" required>
+      </div>
+      <div class="field">
+        <label for="cp-confirm">Nhập lại mật khẩu mới</label>
+        <input class="field-input" id="cp-confirm" type="password" autocomplete="new-password" minlength="6" required>
+      </div>
+      <div class="modal-msg error" id="cp-error" hidden></div>
+      <div class="modal-msg success" id="cp-success" hidden></div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost small" id="cp-cancel">Huỷ</button>
+        <button type="submit" class="btn primary small">Lưu mật khẩu</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <script>
@@ -1270,6 +1315,68 @@
   $("#logout-btn").addEventListener("click", async () => {
     try { await fetch("/api/auth/logout", { method: "POST" }); } catch (e) {}
     location.reload();
+  });
+
+  // ---------------------------------------------------------------
+  // change password
+  // ---------------------------------------------------------------
+  const cpOverlay = $("#change-password-overlay");
+  const cpForm = $("#change-password-form");
+  const cpError = $("#cp-error");
+  const cpSuccess = $("#cp-success");
+
+  function openChangePassword() {
+    cpForm.reset();
+    cpError.hidden = true;
+    cpSuccess.hidden = true;
+    cpOverlay.hidden = false;
+    $("#cp-current").focus();
+  }
+  function closeChangePassword() {
+    cpOverlay.hidden = true;
+  }
+
+  $("#change-password-btn").addEventListener("click", openChangePassword);
+  $("#cp-cancel").addEventListener("click", closeChangePassword);
+  cpOverlay.addEventListener("click", (e) => { if (e.target === cpOverlay) closeChangePassword(); });
+
+  cpForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    cpError.hidden = true;
+    cpSuccess.hidden = true;
+    const currentPassword = $("#cp-current").value;
+    const newPassword = $("#cp-new").value;
+    const confirm = $("#cp-confirm").value;
+    if (newPassword !== confirm) {
+      cpError.textContent = "Mật khẩu mới nhập lại không khớp.";
+      cpError.hidden = false;
+      return;
+    }
+    if (newPassword.length < 6) {
+      cpError.textContent = "Mật khẩu mới cần ít nhất 6 ký tự.";
+      cpError.hidden = false;
+      return;
+    }
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        cpError.textContent = body.error === "wrong current password" ? "Mật khẩu hiện tại không đúng." : "Không đổi được mật khẩu, thử lại.";
+        cpError.hidden = false;
+        return;
+      }
+      cpSuccess.textContent = "Đã đổi mật khẩu thành công.";
+      cpSuccess.hidden = false;
+      cpForm.reset();
+      setTimeout(closeChangePassword, 1400);
+    } catch (e2) {
+      cpError.textContent = "Không kết nối được máy chủ, thử lại.";
+      cpError.hidden = false;
+    }
   });
 
   // ---------------------------------------------------------------

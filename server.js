@@ -74,8 +74,9 @@ async function maybeSeed() {
   }
 }
 
-// Creates/updates the two built-in accounts from env vars on every boot, so
-// rotating a password is just: change the env var on Render, redeploy.
+// Creates the two built-in accounts from env vars the first time the server
+// boots. Only fills in accounts that don't exist yet — once someone changes
+// their password via the app, a redeploy/restart must never overwrite it.
 // Both roles get full read/write access — they're just two separate logins
 // (e.g. one for the developer, one for the shop owner), not a permission tier.
 async function syncSeedUsers() {
@@ -88,7 +89,7 @@ async function syncSeedUsers() {
     const hash = await bcrypt.hash(acc.password, 10);
     await pool.query(
       `INSERT INTO app_users (username, password_hash, role) VALUES ($1,$2,$3)
-       ON CONFLICT (username) DO UPDATE SET password_hash=$2, role=$3`,
+       ON CONFLICT (username) DO NOTHING`,
       [acc.username, hash, acc.role]
     );
   }
@@ -142,6 +143,25 @@ app.post("/api/auth/logout", (req, res) => {
 
 app.get("/api/auth/me", authRequired, (req, res) => {
   res.json({ username: req.user.sub, role: req.user.role });
+});
+
+app.post("/api/auth/change-password", authRequired, async (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: "missing fields" });
+  if (newPassword.length < 6) return res.status(400).json({ error: "password too short" });
+  try {
+    const { rows } = await pool.query("SELECT * FROM app_users WHERE username=$1", [req.user.sub]);
+    const user = rows[0];
+    if (!user || !(await bcrypt.compare(currentPassword, user.password_hash))) {
+      return res.status(401).json({ error: "wrong current password" });
+    }
+    const hash = await bcrypt.hash(newPassword, 10);
+    await pool.query("UPDATE app_users SET password_hash=$1 WHERE username=$2", [hash, user.username]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "server error" });
+  }
 });
 
 function checkCollection(req, res, next) {
