@@ -37,9 +37,11 @@ async function ensureSchema() {
       id SERIAL PRIMARY KEY,
       username TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
-      role TEXT NOT NULL CHECK (role IN ('admin', 'owner'))
+      role TEXT NOT NULL CHECK (role IN ('admin', 'owner')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
+  await pool.query(`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()`);
   // migration: drop the old staff-only 'nhanvien' account (role='user') BEFORE
   // tightening the constraint, or the constraint add fails on that leftover row.
   await pool.query(`ALTER TABLE app_users DROP CONSTRAINT IF EXISTS app_users_role_check`);
@@ -157,6 +159,97 @@ app.post("/api/auth/change-password", authRequired, async (req, res) => {
     }
     const hash = await bcrypt.hash(newPassword, 10);
     await pool.query("UPDATE app_users SET password_hash=$1 WHERE username=$2", [hash, user.username]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "server error" });
+  }
+});
+
+function adminOnly(req, res, next) {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "forbidden" });
+  next();
+}
+
+const USERNAME_RE = /^[a-zA-Z0-9_.-]{3,32}$/;
+
+// Anyone signed in can add a new login. A non-admin can only ever create a
+// fellow "owner" account — never grant admin rights to someone else.
+app.post("/api/users", authRequired, async (req, res) => {
+  let { username, password, role } = req.body || {};
+  username = (username || "").trim();
+  if (!USERNAME_RE.test(username)) {
+    return res.status(400).json({ error: "username must be 3-32 letters/digits/._-" });
+  }
+  if (!password || password.length < 6) {
+    return res.status(400).json({ error: "password too short" });
+  }
+  if (req.user.role !== "admin" || (role !== "admin" && role !== "owner")) {
+    role = "owner";
+  }
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query(
+      "INSERT INTO app_users (username, password_hash, role) VALUES ($1,$2,$3)",
+      [username, hash, role]
+    );
+    res.json({ username, role });
+  } catch (e) {
+    if (e.code === "23505") return res.status(409).json({ error: "username already exists" });
+    console.error(e);
+    res.status(500).json({ error: "server error" });
+  }
+});
+
+// Everything below is admin-only account management — list, reset a
+// password, change a role, or remove an account.
+app.get("/api/users", authRequired, adminOnly, async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT username, role, created_at FROM app_users ORDER BY created_at"
+  );
+  res.json(rows);
+});
+
+app.patch("/api/users/:username", authRequired, adminOnly, async (req, res) => {
+  const { username } = req.params;
+  const { role, newPassword } = req.body || {};
+  try {
+    const { rows } = await pool.query("SELECT * FROM app_users WHERE username=$1", [username]);
+    const target = rows[0];
+    if (!target) return res.status(404).json({ error: "not found" });
+
+    if (role && role !== target.role) {
+      if (role !== "admin" && role !== "owner") return res.status(400).json({ error: "invalid role" });
+      if (target.role === "admin") {
+        const { rows: admins } = await pool.query("SELECT COUNT(*)::int AS c FROM app_users WHERE role='admin'");
+        if (admins[0].c <= 1) return res.status(400).json({ error: "cannot demote the last admin" });
+      }
+      await pool.query("UPDATE app_users SET role=$1 WHERE username=$2", [role, username]);
+    }
+    if (newPassword) {
+      if (newPassword.length < 6) return res.status(400).json({ error: "password too short" });
+      const hash = await bcrypt.hash(newPassword, 10);
+      await pool.query("UPDATE app_users SET password_hash=$1 WHERE username=$2", [hash, username]);
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "server error" });
+  }
+});
+
+app.delete("/api/users/:username", authRequired, adminOnly, async (req, res) => {
+  const { username } = req.params;
+  if (username === req.user.sub) return res.status(400).json({ error: "cannot delete your own account" });
+  try {
+    const { rows } = await pool.query("SELECT * FROM app_users WHERE username=$1", [username]);
+    const target = rows[0];
+    if (!target) return res.status(404).json({ error: "not found" });
+    if (target.role === "admin") {
+      const { rows: admins } = await pool.query("SELECT COUNT(*)::int AS c FROM app_users WHERE role='admin'");
+      if (admins[0].c <= 1) return res.status(400).json({ error: "cannot delete the last admin" });
+    }
+    await pool.query("DELETE FROM app_users WHERE username=$1", [username]);
     res.json({ ok: true });
   } catch (e) {
     console.error(e);

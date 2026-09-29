@@ -381,6 +381,7 @@
       <div class="user-badge" id="user-badge">
         <span id="user-badge-name"></span>
         <span class="role-pill" id="user-badge-role"></span>
+        <button type="button" id="add-account-btn">+ Thêm tài khoản</button>
         <button type="button" id="change-password-btn">Đổi mật khẩu</button>
         <button type="button" id="logout-btn">Đăng xuất</button>
       </div>
@@ -396,6 +397,7 @@
     <button class="tab-btn" data-tab="batches" role="tab">Bán thành phẩm<span class="tab-count" id="count-batches"></span></button>
     <button class="tab-btn" data-tab="recipes" role="tab">Công thức<span class="tab-count" id="count-recipes"></span></button>
     <button class="tab-btn" data-tab="calc" role="tab">Tính cost</button>
+    <button class="tab-btn" data-tab="accounts" role="tab" id="accounts-tab-btn" hidden>Tài khoản</button>
   </nav>
 
   <main>
@@ -505,7 +507,80 @@
         </div>
       </div>
     </section>
+
+    <!-- ============ ACCOUNTS (admin only) ============ -->
+    <section class="panel" id="tab-accounts">
+      <div class="toolbar">
+        <div class="toolbar-row">
+          <h2>Quản lý tài khoản</h2>
+          <button class="btn primary" id="add-account-btn-2">+ Thêm tài khoản</button>
+        </div>
+        <p class="hint">Chỉ admin thấy và quản lý được danh sách này — đổi vai trò, đặt lại mật khẩu, hoặc xoá tài khoản.</p>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:32%">Tài khoản</th>
+                <th style="width:22%">Vai trò</th>
+                <th style="width:26%">Ngày tạo</th>
+                <th class="actions" style="width:20%"></th>
+              </tr>
+            </thead>
+            <tbody id="accounts-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </main>
+</div>
+
+<div class="modal-overlay" id="add-account-overlay" hidden>
+  <div class="modal-card">
+    <h3>Thêm tài khoản</h3>
+    <form id="add-account-form">
+      <div class="field">
+        <label for="aa-username">Tên đăng nhập</label>
+        <input class="field-input" id="aa-username" type="text" autocomplete="off" required>
+      </div>
+      <div class="field">
+        <label for="aa-password">Mật khẩu</label>
+        <input class="field-input" id="aa-password" type="password" autocomplete="new-password" minlength="6" required>
+      </div>
+      <div class="field" id="aa-role-field" hidden>
+        <label for="aa-role">Vai trò</label>
+        <select class="field-input" id="aa-role">
+          <option value="owner">Chủ quán</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="modal-msg error" id="aa-error" hidden></div>
+      <div class="modal-msg success" id="aa-success" hidden></div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost small" id="aa-cancel">Huỷ</button>
+        <button type="submit" class="btn primary small">Tạo tài khoản</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="reset-password-overlay" hidden>
+  <div class="modal-card">
+    <h3>Đặt lại mật khẩu — <span id="rp-username" class="mono"></span></h3>
+    <form id="reset-password-form">
+      <div class="field">
+        <label for="rp-new">Mật khẩu mới</label>
+        <input class="field-input" id="rp-new" type="password" autocomplete="new-password" minlength="6" required>
+      </div>
+      <div class="modal-msg error" id="rp-error" hidden></div>
+      <div class="modal-msg success" id="rp-success" hidden></div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost small" id="rp-cancel">Huỷ</button>
+        <button type="submit" class="btn primary small">Đặt lại</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <div class="modal-overlay" id="change-password-overlay" hidden>
@@ -1276,9 +1351,12 @@
     currentUser = user;
     $("#user-badge-name").textContent = user.username;
     $("#user-badge-role").textContent = user.role === "admin" ? "Quản lý" : "Chủ quán";
+    $("#accounts-tab-btn").hidden = user.role !== "admin";
+    $("#aa-role-field").hidden = user.role !== "admin";
     loginScreen.hidden = true;
     appRoot.hidden = false;
     initStore();
+    if (user.role === "admin") loadAccounts();
   }
 
   function showLogin() {
@@ -1376,6 +1454,170 @@
     } catch (e2) {
       cpError.textContent = "Không kết nối được máy chủ, thử lại.";
       cpError.hidden = false;
+    }
+  });
+
+  // ---------------------------------------------------------------
+  // add account — both roles can add one; only admin gets the role picker
+  // ---------------------------------------------------------------
+  const aaOverlay = $("#add-account-overlay");
+  const aaForm = $("#add-account-form");
+  const aaError = $("#aa-error");
+  const aaSuccess = $("#aa-success");
+
+  function openAddAccount() {
+    aaForm.reset();
+    aaError.hidden = true;
+    aaSuccess.hidden = true;
+    aaOverlay.hidden = false;
+    $("#aa-username").focus();
+  }
+  function closeAddAccount() { aaOverlay.hidden = true; }
+
+  $("#add-account-btn").addEventListener("click", openAddAccount);
+  $("#add-account-btn-2").addEventListener("click", openAddAccount);
+  $("#aa-cancel").addEventListener("click", closeAddAccount);
+  aaOverlay.addEventListener("click", (e) => { if (e.target === aaOverlay) closeAddAccount(); });
+
+  aaForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    aaError.hidden = true;
+    aaSuccess.hidden = true;
+    const username = $("#aa-username").value.trim();
+    const password = $("#aa-password").value;
+    const role = currentUser.role === "admin" ? $("#aa-role").value : undefined;
+    try {
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password, role }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        aaError.textContent = body.error === "username already exists" ? "Tên đăng nhập đã tồn tại." : (body.error || "Không tạo được tài khoản, thử lại.");
+        aaError.hidden = false;
+        return;
+      }
+      aaSuccess.textContent = "Đã tạo tài khoản thành công.";
+      aaSuccess.hidden = false;
+      aaForm.reset();
+      if (currentUser.role === "admin") loadAccounts();
+      setTimeout(closeAddAccount, 1400);
+    } catch (e2) {
+      aaError.textContent = "Không kết nối được máy chủ, thử lại.";
+      aaError.hidden = false;
+    }
+  });
+
+  // ---------------------------------------------------------------
+  // account management (admin only)
+  // ---------------------------------------------------------------
+  const accountsBody = $("#accounts-body");
+  const rpOverlay = $("#reset-password-overlay");
+  const rpForm = $("#reset-password-form");
+  const rpError = $("#rp-error");
+  const rpSuccess = $("#rp-success");
+  let resetTargetUsername = null;
+
+  async function loadAccounts() {
+    try {
+      const res = await fetch("/api/users");
+      if (!res.ok) return;
+      const accounts = await res.json();
+      renderAccounts(accounts);
+    } catch (e) {}
+  }
+
+  function renderAccounts(accounts) {
+    accountsBody.innerHTML = accounts.map((acc) => {
+      const isSelf = acc.username === currentUser.username;
+      const created = acc.created_at ? new Date(acc.created_at).toLocaleDateString("vi-VN") : "–";
+      return `<tr data-username="${escapeAttr(acc.username)}">
+        <td>${escapeAttr(acc.username)}${isSelf ? ' <span class="batch-tag">bạn</span>' : ""}</td>
+        <td>
+          <select class="cell-input" data-field="role" ${isSelf ? "disabled" : ""}>
+            <option value="owner" ${acc.role === "owner" ? "selected" : ""}>Chủ quán</option>
+            <option value="admin" ${acc.role === "admin" ? "selected" : ""}>Admin</option>
+          </select>
+        </td>
+        <td class="mono" style="color:var(--ink-faint)">${created}</td>
+        <td class="actions" style="white-space:nowrap;">
+          <button class="btn ghost small" data-action="reset-pw">Đặt lại MK</button>
+          <button class="icon-btn" data-action="delete-account" title="Xoá tài khoản" ${isSelf ? "disabled" : ""}>✕</button>
+        </td>
+      </tr>`;
+    }).join("");
+  }
+
+  accountsBody.addEventListener("change", async (e) => {
+    if (e.target.dataset.field !== "role") return;
+    const tr = e.target.closest("tr");
+    const username = tr.dataset.username;
+    const role = e.target.value;
+    const res = await fetch(`/api/users/${encodeURIComponent(username)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      alert(body.error === "cannot demote the last admin" ? "Không thể đổi — đây là admin cuối cùng." : "Không đổi được vai trò.");
+      loadAccounts();
+    }
+  });
+
+  accountsBody.addEventListener("click", (e) => {
+    const action = e.target.dataset.action;
+    if (!action) return;
+    const tr = e.target.closest("tr");
+    const username = tr.dataset.username;
+    if (action === "reset-pw") {
+      resetTargetUsername = username;
+      $("#rp-username").textContent = username;
+      rpForm.reset();
+      rpError.hidden = true;
+      rpSuccess.hidden = true;
+      rpOverlay.hidden = false;
+      $("#rp-new").focus();
+      return;
+    }
+    if (action === "delete-account") {
+      if (!confirm(`Xoá tài khoản "${username}"? Không thể hoàn tác.`)) return;
+      fetch(`/api/users/${encodeURIComponent(username)}`, { method: "DELETE" }).then(async (res) => {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          alert(body.error === "cannot delete the last admin" ? "Không thể xoá — đây là admin cuối cùng." : "Không xoá được tài khoản.");
+        }
+        loadAccounts();
+      });
+    }
+  });
+
+  $("#rp-cancel").addEventListener("click", () => { rpOverlay.hidden = true; });
+  rpOverlay.addEventListener("click", (e) => { if (e.target === rpOverlay) rpOverlay.hidden = true; });
+
+  rpForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    rpError.hidden = true;
+    rpSuccess.hidden = true;
+    const newPassword = $("#rp-new").value;
+    try {
+      const res = await fetch(`/api/users/${encodeURIComponent(resetTargetUsername)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newPassword }),
+      });
+      if (!res.ok) {
+        rpError.textContent = "Không đặt lại được mật khẩu, thử lại.";
+        rpError.hidden = false;
+        return;
+      }
+      rpSuccess.textContent = "Đã đặt lại mật khẩu.";
+      rpSuccess.hidden = false;
+      setTimeout(() => { rpOverlay.hidden = true; }, 1200);
+    } catch (e2) {
+      rpError.textContent = "Không kết nối được máy chủ, thử lại.";
+      rpError.hidden = false;
     }
   });
 
