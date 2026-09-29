@@ -21,15 +21,19 @@ const pool = new Pool({
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString("hex");
 const TOKEN_COOKIE = "costly_token";
 const ALLOWED_COLLECTIONS = new Set(["ingredients", "batches", "recipes"]);
+// Legacy data (from before accounts were per-shop) belongs to this tenant —
+// it's the real shop that was already using the app.
+const LEGACY_TENANT = process.env.OWNER_USERNAME || "chuquan";
 
 async function ensureSchema() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS documents (
+      tenant TEXT NOT NULL,
       collection TEXT NOT NULL,
       id TEXT NOT NULL,
       data JSONB NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      PRIMARY KEY (collection, id)
+      PRIMARY KEY (tenant, collection, id)
     )
   `);
   await pool.query(`
@@ -47,10 +51,22 @@ async function ensureSchema() {
   await pool.query(`ALTER TABLE app_users DROP CONSTRAINT IF EXISTS app_users_role_check`);
   await pool.query(`DELETE FROM app_users WHERE role NOT IN ('admin', 'owner')`);
   await pool.query(`ALTER TABLE app_users ADD CONSTRAINT app_users_role_check CHECK (role IN ('admin', 'owner'))`);
+
+  // migration: data used to be shared globally (no tenant column at all).
+  // Give every pre-existing row to the legacy tenant BEFORE tightening the
+  // primary key, then rebuild the key as (tenant, collection, id).
+  await pool.query(`ALTER TABLE documents ADD COLUMN IF NOT EXISTS tenant TEXT`);
+  await pool.query(`UPDATE documents SET tenant=$1 WHERE tenant IS NULL`, [LEGACY_TENANT]);
+  await pool.query(`ALTER TABLE documents ALTER COLUMN tenant SET NOT NULL`);
+  await pool.query(`ALTER TABLE documents DROP CONSTRAINT IF EXISTS documents_pkey`);
+  await pool.query(`ALTER TABLE documents ADD CONSTRAINT documents_pkey PRIMARY KEY (tenant, collection, id)`);
 }
 
-async function maybeSeed() {
-  const { rows } = await pool.query("SELECT COUNT(*)::int AS c FROM documents");
+// Seeds the legacy tenant's data from seed.json, but only if it has nothing
+// yet (a brand-new deployment). A freshly created owner account always
+// starts with zero documents — nothing seeds their tenant automatically.
+async function maybeSeedLegacyTenant() {
+  const { rows } = await pool.query("SELECT COUNT(*)::int AS c FROM documents WHERE tenant=$1", [LEGACY_TENANT]);
   if (rows[0].c > 0) return;
   const seedPath = path.join(__dirname, "seed.json");
   if (!fs.existsSync(seedPath)) return;
@@ -61,13 +77,13 @@ async function maybeSeed() {
     for (const collection of Object.keys(seed)) {
       for (const doc of seed[collection]) {
         await client.query(
-          "INSERT INTO documents (collection, id, data) VALUES ($1,$2,$3) ON CONFLICT (collection,id) DO NOTHING",
-          [collection, doc.id, doc.data]
+          "INSERT INTO documents (tenant, collection, id, data) VALUES ($1,$2,$3,$4) ON CONFLICT (tenant,collection,id) DO NOTHING",
+          [LEGACY_TENANT, collection, doc.id, doc.data]
         );
       }
     }
     await client.query("COMMIT");
-    console.log("Seeded initial data from seed.json");
+    console.log("Seeded initial data from seed.json into tenant " + LEGACY_TENANT);
   } catch (e) {
     await client.query("ROLLBACK");
     console.error("Seed failed", e);
@@ -264,11 +280,34 @@ function checkCollection(req, res, next) {
   next();
 }
 
-app.get("/api/:collection", authRequired, checkCollection, async (req, res) => {
+// Every shop's ingredients/batches/recipes are isolated by tenant. An owner
+// always operates on their own shop (their username IS the tenant) — the
+// server ignores anything else they might pass. Admin isn't a shop of their
+// own, so they must say which shop they're viewing via ?tenant=<username>,
+// and that username must be a real owner account.
+async function resolveTenant(req, res, next) {
+  if (req.user.role === "owner") {
+    req.tenant = req.user.sub;
+    return next();
+  }
+  const tenant = req.query.tenant;
+  if (!tenant) return res.status(400).json({ error: "tenant required" });
+  try {
+    const { rows } = await pool.query("SELECT 1 FROM app_users WHERE username=$1 AND role='owner'", [tenant]);
+    if (!rows.length) return res.status(400).json({ error: "unknown tenant" });
+    req.tenant = tenant;
+    next();
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "server error" });
+  }
+}
+
+app.get("/api/:collection", authRequired, resolveTenant, checkCollection, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      "SELECT id, data FROM documents WHERE collection=$1 ORDER BY id",
-      [req.params.collection]
+      "SELECT id, data FROM documents WHERE tenant=$1 AND collection=$2 ORDER BY id",
+      [req.tenant, req.params.collection]
     );
     res.json(rows.map((r) => Object.assign({ id: r.id }, r.data)));
   } catch (e) {
@@ -277,13 +316,13 @@ app.get("/api/:collection", authRequired, checkCollection, async (req, res) => {
   }
 });
 
-app.put("/api/:collection/:id", authRequired, checkCollection, async (req, res) => {
+app.put("/api/:collection/:id", authRequired, resolveTenant, checkCollection, async (req, res) => {
   try {
     const data = req.body || {};
     await pool.query(
-      `INSERT INTO documents (collection, id, data, updated_at) VALUES ($1,$2,$3,now())
-       ON CONFLICT (collection,id) DO UPDATE SET data=$3, updated_at=now()`,
-      [req.params.collection, req.params.id, data]
+      `INSERT INTO documents (tenant, collection, id, data, updated_at) VALUES ($1,$2,$3,$4,now())
+       ON CONFLICT (tenant,collection,id) DO UPDATE SET data=$4, updated_at=now()`,
+      [req.tenant, req.params.collection, req.params.id, data]
     );
     res.json({ ok: true });
   } catch (e) {
@@ -292,9 +331,10 @@ app.put("/api/:collection/:id", authRequired, checkCollection, async (req, res) 
   }
 });
 
-app.delete("/api/:collection/:id", authRequired, checkCollection, async (req, res) => {
+app.delete("/api/:collection/:id", authRequired, resolveTenant, checkCollection, async (req, res) => {
   try {
-    await pool.query("DELETE FROM documents WHERE collection=$1 AND id=$2", [
+    await pool.query("DELETE FROM documents WHERE tenant=$1 AND collection=$2 AND id=$3", [
+      req.tenant,
       req.params.collection,
       req.params.id,
     ]);
@@ -312,7 +352,7 @@ const PORT = process.env.PORT || 3000;
 (async () => {
   try {
     await ensureSchema();
-    await maybeSeed();
+    await maybeSeedLegacyTenant();
     await syncSeedUsers();
   } catch (e) {
     console.error("Startup error", e);

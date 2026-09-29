@@ -331,6 +331,13 @@
   .user-badge button { background: none; border: none; color: var(--ink-faint); font-size: 12.5px; cursor: pointer; text-decoration: underline; padding: 0; }
   .user-badge button:hover { color: var(--accent-strong); }
 
+  .tenant-bar {
+    display: flex; align-items: center; gap: 10px; background: var(--accent-tint);
+    border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 14px;
+    font-size: 13px; font-weight: 600; color: var(--accent-strong);
+  }
+  .tenant-bar select { width: auto; min-width: 180px; padding: 5px 10px; font-weight: 700; }
+
   /* ---------- modal (change password) ---------- */
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(43,22,22,.45); z-index: 50;
@@ -391,6 +398,11 @@
       </div>
     </div>
   </header>
+
+  <div class="tenant-bar" id="tenant-bar" hidden>
+    <label for="tenant-select">Đang xem quán:</label>
+    <select class="field-input" id="tenant-select"></select>
+  </div>
 
   <nav class="tabs" role="tablist">
     <button class="tab-btn active" data-tab="ingredients" role="tab">Nguyên liệu<span class="tab-count" id="count-ingredients"></span></button>
@@ -621,6 +633,7 @@
   let recipes = [];       // {id, name, items:[{id, ingredientId, qty}]} — ingredientId may point at a raw ingredient OR a batch
   let calcItems = [];     // {id, ingredientId, qty} — scratchpad, not persisted
   let lastReceiptTotal = null; // drives the "value-pulse" flash when the total changes
+  let currentTenant = null; // which shop's data is loaded — own shop for an owner, admin's picked shop for admin
 
   const $ = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
@@ -693,35 +706,47 @@
   // localStorage cache as a fallback if the API is unreachable.
   // ---------------------------------------------------------------
   const API_BASE = "/api";
-  const LS_ING = "costly_ingredients";
-  const LS_BATCH = "costly_batches";
-  const LS_REC = "costly_recipes";
+  // Scoped per shop so the fallback cache never mixes two tenants' data if
+  // more than one account is ever used from the same browser.
+  function lsScope() {
+    if (!currentUser) return "anon";
+    return currentUser.role === "admin" ? (currentTenant || "none") : currentUser.username;
+  }
+  function lsKey(base) { return base + "__" + lsScope(); }
 
   function lsLoad() {
     try {
-      ingredients = JSON.parse(localStorage.getItem(LS_ING) || "[]");
-      batches = JSON.parse(localStorage.getItem(LS_BATCH) || "[]");
-      recipes = JSON.parse(localStorage.getItem(LS_REC) || "[]");
+      ingredients = JSON.parse(localStorage.getItem(lsKey("costly_ingredients")) || "[]");
+      batches = JSON.parse(localStorage.getItem(lsKey("costly_batches")) || "[]");
+      recipes = JSON.parse(localStorage.getItem(lsKey("costly_recipes")) || "[]");
     } catch (e) { ingredients = []; batches = []; recipes = []; }
   }
-  function lsSaveIngredients() { try { localStorage.setItem(LS_ING, JSON.stringify(ingredients)); } catch (e) {} }
-  function lsSaveBatches() { try { localStorage.setItem(LS_BATCH, JSON.stringify(batches)); } catch (e) {} }
-  function lsSaveRecipes() { try { localStorage.setItem(LS_REC, JSON.stringify(recipes)); } catch (e) {} }
+  function lsSaveIngredients() { try { localStorage.setItem(lsKey("costly_ingredients"), JSON.stringify(ingredients)); } catch (e) {} }
+  function lsSaveBatches() { try { localStorage.setItem(lsKey("costly_batches"), JSON.stringify(batches)); } catch (e) {} }
+  function lsSaveRecipes() { try { localStorage.setItem(lsKey("costly_recipes"), JSON.stringify(recipes)); } catch (e) {} }
 
+  // admin has no shop of their own — every data call must say which shop
+  // (tenant) it's for. An owner's shop is implicit server-side (their own
+  // login), so this stays empty for them even if currentTenant were set.
+  function tenantQS() {
+    return currentUser && currentUser.role === "admin" && currentTenant
+      ? "?tenant=" + encodeURIComponent(currentTenant)
+      : "";
+  }
   async function apiList(collection) {
-    const res = await fetch(`${API_BASE}/${collection}`);
+    const res = await fetch(`${API_BASE}/${collection}${tenantQS()}`);
     if (!res.ok) throw new Error("list failed: " + collection);
     return res.json();
   }
   function apiSet(collection, id, data) {
-    return fetch(`${API_BASE}/${collection}/${encodeURIComponent(id)}`, {
+    return fetch(`${API_BASE}/${collection}/${encodeURIComponent(id)}${tenantQS()}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
   }
   function apiDelete(collection, id) {
-    return fetch(`${API_BASE}/${collection}/${encodeURIComponent(id)}`, { method: "DELETE" });
+    return fetch(`${API_BASE}/${collection}/${encodeURIComponent(id)}${tenantQS()}`, { method: "DELETE" });
   }
 
   function setSyncStatus(mode) {
@@ -1347,7 +1372,7 @@
   const loginForm = $("#login-form");
   const loginError = $("#login-error");
 
-  function applyUser(user) {
+  async function applyUser(user) {
     currentUser = user;
     $("#user-badge-name").textContent = user.username;
     $("#user-badge-role").textContent = user.role === "admin" ? "Quản lý" : "Chủ quán";
@@ -1355,9 +1380,46 @@
     $("#aa-role-field").hidden = user.role !== "admin";
     loginScreen.hidden = true;
     appRoot.hidden = false;
+    if (user.role === "admin") {
+      loadAccounts();
+      await setupTenantSelector();
+    } else {
+      $("#tenant-bar").hidden = true;
+      currentTenant = null;
+    }
     initStore();
-    if (user.role === "admin") loadAccounts();
   }
+
+  // Admin picks which shop's data to view/edit — populated from the owner
+  // accounts that exist. Keeps the previous pick if it's still valid (e.g.
+  // after creating a new account), otherwise defaults to the first shop.
+  async function setupTenantSelector() {
+    const bar = $("#tenant-bar");
+    const select = $("#tenant-select");
+    try {
+      const res = await fetch("/api/users");
+      const accounts = res.ok ? await res.json() : [];
+      const owners = accounts.filter((a) => a.role === "owner");
+      if (!owners.length) {
+        bar.hidden = true;
+        currentTenant = null;
+        return;
+      }
+      const previous = currentTenant;
+      select.innerHTML = owners.map((o) => `<option value="${escapeAttr(o.username)}">${escapeAttr(o.username)}</option>`).join("");
+      currentTenant = owners.some((o) => o.username === previous) ? previous : owners[0].username;
+      select.value = currentTenant;
+      bar.hidden = false;
+    } catch (e) {
+      bar.hidden = true;
+      currentTenant = null;
+    }
+  }
+
+  $("#tenant-select").addEventListener("change", (e) => {
+    currentTenant = e.target.value;
+    initStore();
+  });
 
   function showLogin() {
     currentUser = null;
@@ -1501,7 +1563,7 @@
       aaSuccess.textContent = "Đã tạo tài khoản thành công.";
       aaSuccess.hidden = false;
       aaForm.reset();
-      if (currentUser.role === "admin") loadAccounts();
+      if (currentUser.role === "admin") { loadAccounts(); setupTenantSelector(); }
       setTimeout(closeAddAccount, 1400);
     } catch (e2) {
       aaError.textContent = "Không kết nối được máy chủ, thử lại.";
@@ -1564,6 +1626,9 @@
       alert(body.error === "cannot demote the last admin" ? "Không thể đổi — đây là admin cuối cùng." : "Không đổi được vai trò.");
       loadAccounts();
     }
+    const before = currentTenant;
+    await setupTenantSelector();
+    if (currentTenant !== before) initStore();
   });
 
   accountsBody.addEventListener("click", (e) => {
@@ -1589,6 +1654,9 @@
           alert(body.error === "cannot delete the last admin" ? "Không thể xoá — đây là admin cuối cùng." : "Không xoá được tài khoản.");
         }
         loadAccounts();
+        const before = currentTenant;
+        await setupTenantSelector();
+        if (currentTenant !== before) initStore();
       });
     }
   });
