@@ -355,6 +355,26 @@
   .modal-msg { border-radius: 8px; padding: 8px 10px; font-size: 13px; }
   .modal-msg.error { color: var(--accent-strong); background: var(--accent-tint); }
   .modal-msg.success { color: var(--good); background: var(--good-tint); }
+
+  /* ---------- print ---------- */
+  #print-area { display: none; }
+  .print-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 18px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+  .print-header h2 { font-size: 20px; margin: 0; }
+  .print-header .print-date { font-size: 12px; color: #555; }
+  .print-recipe-name { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+  table.print-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 14px; }
+  table.print-table th, table.print-table td { border: 1px solid #999; padding: 6px 10px; text-align: left; }
+  table.print-table th.num, table.print-table td.num { text-align: right; font-family: 'IBM Plex Mono', monospace; }
+  .print-total-row td { font-weight: 700; border-top: 2px solid #000; }
+  .print-summary-row { display: flex; justify-content: space-between; font-size: 13px; margin: 3px 0; }
+  .print-summary-row.total { font-weight: 700; font-size: 15px; border-top: 1px solid #999; padding-top: 6px; margin-top: 6px; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #print-area, #print-area * { visibility: visible; }
+    #print-area { display: block; position: absolute; left: 0; top: 0; width: 100%; padding: 20px; color: #000; background: #fff; }
+    .print-btn { display: none; }
+  }
 </style>
 </head>
 <body>
@@ -464,9 +484,12 @@
       <div class="toolbar">
         <div class="toolbar-row">
           <h2>Công thức pha chế</h2>
-          <button class="btn primary admin-only" data-action="add-recipe">+ Thêm công thức</button>
+          <div style="display:flex; gap:8px;">
+            <button class="btn ghost small print-btn" id="print-summary-btn" type="button">🖨 In tổng quát</button>
+            <button class="btn primary admin-only" data-action="add-recipe">+ Thêm công thức</button>
+          </div>
         </div>
-        <p class="hint">Mỗi công thức là danh sách nguyên liệu và định lượng cho 1 ly.</p>
+        <p class="hint">Mỗi công thức là danh sách nguyên liệu và định lượng cho 1 ly. "In tổng quát" in bảng tên món + giá vốn của toàn bộ công thức.</p>
       </div>
       <div id="recipe-list"></div>
       <div class="empty-state card" id="recipes-empty" hidden><span class="emoji">📋</span>Chưa có công thức nào. Bấm "+ Thêm công thức" để tạo công thức đầu tiên.</div>
@@ -516,6 +539,7 @@
             <div class="receipt-row"><span>Lãi gộp / ly</span><span class="val mono" id="receipt-profit">0 đ</span></div>
             <div class="receipt-row"><span>Tỷ lệ giá vốn (food cost)</span><span class="val mono" id="receipt-foodcost-pct">0%<span class="foodcost-pill" id="foodcost-pill"></span></span></div>
           </div>
+          <button class="btn ghost small print-btn" id="print-detail-btn" type="button">🖨 In chi tiết</button>
         </div>
       </div>
     </section>
@@ -547,6 +571,8 @@
     </section>
   </main>
 </div>
+
+<div id="print-area"></div>
 
 <div class="modal-overlay" id="add-account-overlay" hidden>
   <div class="modal-card">
@@ -1362,6 +1388,67 @@
     renderReceipt();
   });
   sellPriceInput.addEventListener("focus", () => sellPriceInput.select());
+
+  // ---------------------------------------------------------------
+  // print — detailed receipt (current calculator) or a full price list
+  // ---------------------------------------------------------------
+  function printNow(html) {
+    $("#print-area").innerHTML = html;
+    window.print();
+  }
+  function printDateStamp() {
+    const d = new Date();
+    return "In lúc: " + d.toLocaleDateString("vi-VN") + " " + d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  $("#print-detail-btn").addEventListener("click", () => {
+    const name = $("#receipt-recipe-name").textContent || "Tự chọn nguyên liệu";
+    const rows = calcItems.map((it) => {
+      const p = resolvePriceable(it.ingredientId);
+      const cost = p ? p.price * it.qty : 0;
+      const pname = p ? (p.name || "(chưa đặt tên)") : "⚠ đã xoá";
+      const unit = p ? p.unit : "";
+      return `<tr><td>${escapeAttr(pname)}</td><td class="num">${it.qty}</td><td>${escapeAttr(unit)}</td><td class="num">${fmtVND(cost)}</td></tr>`;
+    }).join("");
+    const total = calcItems.reduce((sum, it) => {
+      const p = resolvePriceable(it.ingredientId);
+      return sum + (p ? p.price * it.qty : 0);
+    }, 0);
+    const sell = parseMoneyInput(sellPriceInput.value);
+    let sellHtml = "";
+    if (sell > 0) {
+      const profit = sell - total;
+      const pct = (total / sell) * 100;
+      sellHtml = `
+        <div class="print-summary-row"><span>Giá bán</span><span>${fmtVND(sell)}</span></div>
+        <div class="print-summary-row"><span>Lãi gộp / ly</span><span>${fmtVND(profit)}</span></div>
+        <div class="print-summary-row total"><span>Tỷ lệ giá vốn (food cost)</span><span>${pct.toFixed(1)}%</span></div>
+      `;
+    }
+    printNow(`
+      <div class="print-header"><h2>🧋 Cost Ly — Giá vốn chi tiết</h2><span class="print-date">${printDateStamp()}</span></div>
+      <div class="print-recipe-name">${escapeAttr(name)}</div>
+      <table class="print-table">
+        <thead><tr><th>Nguyên liệu</th><th class="num">Số lượng</th><th>Đ.vị</th><th class="num">Cost</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4">Chưa có nguyên liệu.</td></tr>'}</tbody>
+        <tfoot><tr class="print-total-row"><td colspan="3">Tổng giá vốn</td><td class="num">${fmtVND(total)}</td></tr></tfoot>
+      </table>
+      ${sellHtml}
+    `);
+  });
+
+  $("#print-summary-btn").addEventListener("click", () => {
+    const rows = recipes.slice().sort((a, b) => (a.name || "").localeCompare(b.name || "", "vi")).map((r) =>
+      `<tr><td>${escapeAttr(r.name || "(chưa đặt tên)")}</td><td class="num">${fmtVND(recipeTotal(r))}</td></tr>`
+    ).join("");
+    printNow(`
+      <div class="print-header"><h2>🧋 Cost Ly — Bảng giá vốn tổng quát</h2><span class="print-date">${printDateStamp()}</span></div>
+      <table class="print-table">
+        <thead><tr><th>Tên món</th><th class="num">Giá vốn</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="2">Chưa có công thức nào.</td></tr>'}</tbody>
+      </table>
+    `);
+  });
 
   // ---------------------------------------------------------------
   // auth — login screen gates the whole app; role decides edit rights
